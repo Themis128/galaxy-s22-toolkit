@@ -1,0 +1,70 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+bdist.win-amd64/
+.eggs/
+*.bak
+*.tmp
+
+# --- Tooling caches ---
+.ruff_cache/
+.mimosa/
+.mypy_cache/
+.pytest_cache/
+.hypothesis/
+
+# --- Virtual envs ---
+.venv/
+venv/
+
+# --- Runtime data (reports, backups, pulls, screenshots) ---
+data/
+
+# --- Legacy OneDrive placeholder directory (do not use; see README) ---
+storage/
+
+# --- Session/lock artifacts ---
+sess_*.lock
+*.baseline
+sess_*.json
+session_*.lock
+hook-state/
+hook-status/
+0.15.15/
+CACHEDIR.TAG
+
+# --- Local media artifacts ---
+*.png
+*.xml
+
+# ...except tracked config XML
+!diagnostics/task_scheduler.xml
+
+# --- Secrets & local env ---
+.env
+.env.*
+
+# --- OS / editor ---
+Desktop.ini
+Thumbs.db
+.DS_Store
+
+# --- Reports at root are kept out of the toolkit repo ---
+micro1-report.md
+micro1-interview-prep.html
+
+# --- Unrelated content in the shared CrossDevice root ---
+/16kHz
+/Flux
+/LLM
+/VoiceAgent
+/WS
+/phone
+/Saved Searches/
+/*.lnk
+.zcode/skkills/
+.zcode/plans/

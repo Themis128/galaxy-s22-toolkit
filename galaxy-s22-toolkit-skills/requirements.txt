@@ -1,0 +1,26 @@
+# Galaxy S22+ Phone Toolkit - Requirements for Devin environment
+# 
+# RECOMMENDED: Use install.sh for proper dependency order and build isolation:
+#   bash install.sh
+#
+# Alternative: pip install with specific flags:
+#   pip install hatchling
+#   pip install ../phone-lib --no-build-isolation
+#   pip install ../.zcode/skills/phone-diagnostics --no-build-isolation
+#   pip install ../.zcode/skills/phone-screen-control --no-build-isolation
+#   pip install ../.zcode/skills/phone-file-transfer --no-build-isolation
+#   pip install ../.zcode/skills/phone-logcat --no-build-isolation
+#   pip install ../.zcode/skills/phone-app-manager --no-build-isolation
+#
+# Note: Direct pip install -r requirements.txt with local paths may hit
+# Windows file locking issues with editable installs. Use install.sh instead.
+#
+# Core library (uses hatchling build backend)
+../phone-lib
+
+# ZCode skills (each depends on galaxy-s22-toolkit>=0.1.0)
+../.zcode/skills/phone-diagnostics
+../.zcode/skills/phone-screen-control
+../.zcode/skills/phone-file-transfer
+../.zcode/skills/phone-logcat
+../.zcode/skills/phone-app-manager

@@ -1,0 +1,143 @@
+# Diagnostics Configuration
+
+# Device settings
+device:
+  serial: "RFCTA0AEKZP"  # Galaxy S22+ serial
+  adb_path: ""  # Auto-detect if empty
+  wireless_adb:
+    enabled: true
+    port: 5555
+    auto_connect: true  # Auto-reconnect on startup
+
+# Health check thresholds
+thresholds:
+  battery:
+    min_level_percent: 20
+    max_temperature_c: 45
+    min_health_good: true
+    charge_cycles_warning: 500
+  
+  storage:
+    max_usage_percent: 85
+    min_free_gb: 2
+    large_file_threshold_mb: 500
+  
+  thermal:
+    max_zone_temp_c: 55
+    throttle_warning: true
+  
+  network:
+    dns_timeout_ms: 5000
+    http_timeout_ms: 10000
+    min_signal_dbm: -100
+  
+  logcat:
+    crash_window_minutes: 60
+    anr_window_minutes: 60
+    max_crashes_per_hour: 5
+    max_anrs_per_hour: 3
+    
+    # False positive filtering configuration
+    filter:
+      # Filter Samsung system verbose logging (ERROR/WARN levels from Samsung services)
+      filter_samsung: true
+      
+      # Filter third-party app spam (social media, analytics, ads, etc.)
+      filter_third_party: true
+      
+      # Filter debug/verbose level messages that appear as ERROR/WARN
+      filter_verbose: true
+      
+      # Filter known benign warnings (dex2oat, SELinux, WiFi scanning, etc.)
+      filter_benign: true
+  
+  security:
+    max_patch_age_days: 90
+
+# Notification settings
+notifications:
+  # Desktop notifications (Windows toast)
+  desktop:
+    enabled: true
+    only_on_issues: true
+  
+  # Webhook (Discord, Slack, generic HTTP)
+  webhook:
+    enabled: false
+    url: ""
+    method: "POST"
+    headers: {}
+    template: |
+      {
+        "text": "Phone Health Alert",
+        "embeds": [{
+          "title": "{{device_name}} Health Check",
+          "description": "{{summary}}",
+          "color": {{color}},
+          "fields": [
+            {"name": "Battery", "value": "{{battery_status}}", "inline": true},
+            {"name": "Storage", "value": "{{storage_status}}", "inline": true},
+            {"name": "Thermal", "value": "{{thermal_status}}", "inline": true},
+            {"name": "Network", "value": "{{network_status}}", "inline": true}
+          ]
+        }]
+      }
+  
+  # Email (SMTP)
+  email:
+    enabled: false
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    username: ""
+    password: ""
+    from_address: ""
+    to_addresses: []
+  
+  # Log file
+  log_file:
+    enabled: true
+    path: "logs/diagnostics.log"
+    max_size_mb: 10
+    max_files: 5
+
+# Schedule settings
+schedule:
+  # Run daily at this time (24-hour format)
+  daily_time: "03:00"
+  
+  # Also run on these events
+  on_usb_connect: true
+  on_charge_start: false
+  
+  # Minimum interval between runs (minutes)
+  min_interval_minutes: 60
+
+# Output settings
+output:
+  # Save JSON report
+  json_report:
+    enabled: true
+    path: "reports/health_report_{{date}}.json"
+  
+  # Save human-readable summary
+  summary_report:
+    enabled: true
+    path: "reports/summary_{{date}}.txt"
+  
+  # Keep reports for N days
+  retention_days: 30
+
+# Advanced settings
+advanced:
+  # Timeout for individual checks (seconds)
+  check_timeout: 30
+  
+  # Retry failed checks
+  retry_failed: true
+  max_retries: 2
+  
+  # Run checks in parallel where possible
+  parallel_checks: true
+  
+  # Verbose logging
+  verbose: false

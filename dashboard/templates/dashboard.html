@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galaxy S22+ Monitoring Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        
+        .header .status {
+            display: inline-block;
+            margin-left: 1rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        
+        .status.healthy { background: #2ecc71; }
+        .status.warning { background: #f39c12; }
+        .status.critical { background: #e74c3c; }
+        .status.unknown { background: #95a5a6; }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1.5rem;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 1.5rem;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            overflow: hidden;
+        }
+        
+        .card-header {
+            background: #fafafa;
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid #eee;
+            font-weight: 600;
+            font-size: 1rem;
+            color: #333;
+        }
+        
+        .card-body {
+            padding: 1.25rem;
+        }
+        
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .metric-row:last-child {
+            border-bottom: none;
+        }
+        
+        .metric-label {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        .metric-value {
+            font-weight: 600;
+            color: #333;
+            font-size: 0.95rem;
+        }
+        
+        .metric-value.warning { color: #f39c12; }
+        .metric-value.critical { color: #e74c3c; }
+        .metric-value.good { color: #2ecc71; }
+        
+        .chart-container {
+            position: relative;
+            height: 200px;
+            margin-top: 1rem;
+        }
+        
+        .thermal-zones {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        .zone-badge {
+            padding: 0.4rem 0.75rem;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            background: #e8f0fe;
+            color: #1e3c72;
+        }
+        
+        .zone-badge.critical { background: #fdeaea; color: #c0392b; }
+        .zone-badge.warning { background: #fef3e2; color: #d68910; }
+        .zone-badge.normal { background: #e8f8f5; color: #1e8e49; }
+        
+        .connection-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            margin-bottom: 1rem;
+        }
+        
+        .connection-status.connected { background: #e8f8f5; color: #1e8e49; }
+        .connection-status.disconnected { background: #fdeaea; color: #c0392b; }
+        .connection-status.connecting { background: #fef3e2; color: #d68910; }
+        
+        .connection-status::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        
+        .connection-status.connected::before { background: #2ecc71; }
+        .connection-status.disconnected::before { background: #e74c3c; }
+        .connection-status.connecting::before { background: #f39c12; animation: pulse 1s infinite; }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .last-update {
+            font-size: 0.8rem;
+            color: #999;
+            text-align: right;
+            margin-top: 0.5rem;
+        }
+        
+        .btn {
+            background: #1e3c72;
+            color: white;
+            border: none;
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .btn:hover { background: #2a5298; }
+        .btn:disabled { background: #95a5a6; cursor: not-allowed; }
+        
+        .controls {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+        
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            .grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📱 Galaxy S22+ Monitoring Dashboard</h1>
+        <span class="status" id="overall-status">UNKNOWN</span>
+    </div>
+    
+    <div class="container">
+        <div class="connection-status disconnected" id="connection-status">
+            <span id="connection-text">Disconnected</span>
+        </div>
+        
+        <div class="controls">
+            <button class="btn" id="refresh-btn" onclick="refreshData()">🔄 Refresh Now</button>
+            <button class="btn" id="diagnostics-btn" onclick="runDiagnostics()">🏥 Run Diagnostics</button>
+            <span class="last-update">Last update: <span id="last-update">Never</span></span>
+        </div>
+        
+        <div class="grid">
+            <!-- Battery Card -->
+            <div class="card">
+                <div class="card-header">🔋 Battery</div>
+                <div class="card-body" id="battery-card">
+                    <div class="metric-row">
+                        <span class="metric-label">Level</span>
+                        <span class="metric-value" id="battery-level">--%</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Health</span>
+                        <span class="metric-value" id="battery-health">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Status</span>
+                        <span class="metric-value" id="battery-status">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Temperature</span>
+                        <span class="metric-value" id="battery-temp">--°C</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Voltage</span>
+                        <span class="metric-value" id="battery-voltage">-- mV</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Current</span>
+                        <span class="metric-value" id="battery-current">-- mA</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Charge Cycles</span>
+                        <span class="metric-value" id="battery-cycles">--</span>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="battery-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Storage Card -->
+            <div class="card">
+                <div class="card-header">💾 Storage</div>
+                <div class="card-body" id="storage-card">
+                    <div id="storage-partitions"></div>
+                    <div class="chart-container">
+                        <canvas id="storage-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Thermal Card -->
+            <div class="card">
+                <div class="card-header">🌡️ Thermal</div>
+                <div class="card-body" id="thermal-card">
+                    <div class="metric-row">
+                        <span class="metric-label">Overall Status</span>
+                        <span class="metric-value" id="thermal-status">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">CPU Throttling</span>
+                        <span class="metric-value" id="thermal-cpu">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">GPU Throttling</span>
+                        <span class="metric-value" id="thermal-gpu">--</span>
+                    </div>
+                    <div class="thermal-zones" id="thermal-zones"></div>
+                    <div class="chart-container">
+                        <canvas id="thermal-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Network Card -->
+            <div class="card">
+                <div class="card-header">📶 Network</div>
+                <div class="card-body" id="network-card">
+                    <div class="metric-row">
+                        <span class="metric-label">Connection</span>
+                        <span class="metric-value" id="network-type">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">SSID / Operator</span>
+                        <span class="metric-value" id="network-name">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Signal</span>
+                        <span class="metric-value" id="network-signal">-- dBm</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Internet</span>
+                        <span class="metric-value" id="network-internet">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Gateway</span>
+                        <span class="metric-value" id="network-gateway">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">DNS</span>
+                        <span class="metric-value" id="network-dns">--</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Apps Card -->
+            <div class="card">
+                <div class="card-header">📱 Apps</div>
+                <div class="card-body" id="apps-card">
+                    <div class="metric-row">
+                        <span class="metric-label">Running Apps</span>
+                        <span class="metric-value" id="apps-count">--</span>
+                    </div>
+                    <div id="apps-list"></div>
+                </div>
+            </div>
+            
+            <!-- Device Info Card -->
+            <div class="card">
+                <div class="card-header">📋 Device Info</div>
+                <div class="card-body" id="device-card">
+                    <div class="metric-row">
+                        <span class="metric-label">Model</span>
+                        <span class="metric-value" id="device-model">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Android Version</span>
+                        <span class="metric-value" id="device-android">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">API Level</span>
+                        <span class="metric-value" id="device-api">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Security Patch</span>
+                        <span class="metric-value" id="device-patch">--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Chart instances
+        let charts = {};
+        
+        // WebSocket connection
+        let ws = null;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+        
+        // Color schemes
+        const colors = {
+            primary: '#1e3c72',
+            secondary: '#2a5298',
+            good: '#2ecc71',
+            warning: '#f39c12',
+            critical: '#e74c3c',
+            grid: '#e0e0e0',
+            text: '#666'
+        };
+        
+        // Initialize charts
+        function initCharts() {
+            // Battery chart
+            const batteryCtx = document.getElementById('battery-chart').getContext('2d');
+            charts.battery = new Chart(batteryCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Battery %',
+                        data: [],
+                        borderColor: colors.primary,
+                        backgroundColor: 'rgba(30, 60, 114, 0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHoverRadius: 4
+                    }, {
+                        label: 'Temp (°C)',
+                        data: [],
+                        borderColor: colors.warning,
+                        backgroundColor: 'rgba(243, 156, 18, 0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        yAxisID: 'y1'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { legend: { position: 'top', labels: { font: { size: 10 } } } },
+                    scales: {
+                        x: { type: 'time', time: { unit: 'minute', displayFormats: { minute: 'HH:mm' } }, grid: { color: colors.grid }, ticks: { font: { size: 9 } } },
+                        y: { min: 0, max: 100, grid: { color: colors.grid }, ticks: { font: { size: 9 } } },
+                        y1: { type: 'linear', display: true, position: 'right', min: 0, max: 60, grid: { drawOnChartArea: false }, ticks: { font: { size: 9 } } }
+                    }
+                }
+            });
+            
+            // Storage chart
+            const storageCtx = document.getElementById('storage-chart').getContext('2d');
+            charts.storage = new Chart(storageCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        data: [],
+                        backgroundColor: [colors.primary, colors.good, colors.warning, colors.critical, '#9b59b6', '#1abc9c'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { font: { size: 10 }, padding: 10 } } },
+                    cutout: '60%'
+                }
+            });
+            
+            // Thermal chart
+            const thermalCtx = document.getElementById('thermal-chart').getContext('2d');
+            charts.thermal = new Chart(thermalCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Max Zone Temp (°C)',
+                        data: [],
+                        borderColor: colors.critical,
+                        backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHoverRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { type: 'time', time: { unit: 'minute', displayFormats: { minute: 'HH:mm' } }, grid: { color: colors.grid }, ticks: { font: { size: 9 } } },
+                        y: { min: 20, max: 80, grid: { color: colors.grid }, ticks: { font: { size: 9 } } }
+                    }
+                }
+            });
+        }
+        
+        // Connect WebSocket
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws/live`);
+            
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                updateConnectionStatus('connected', 'Connected');
+                reconnectAttempts = 0;
+            };
+            
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                if (msg.type === 'metrics' || msg.type === 'initial') {
+                    updateDashboard(msg.data);
+                }
+            };
+            
+            ws.onclose = () => {
+                updateConnectionStatus('disconnected', 'Disconnected');
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    setTimeout(connectWebSocket, 2000 * reconnectAttempts);
+                }
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+        }
+        
+        function updateConnectionStatus(status, text) {
+            const el = document.getElementById('connection-status');
+            const textEl = document.getElementById('connection-text');
+            el.className = `connection-status ${status}`;
+            textEl.textContent = text;
+        }
+        
+        // Update dashboard with metrics
+        function updateDashboard(data) {
+            if (data.error) {
+                updateConnectionStatus('disconnected', `Error: ${data.error}`);
+                return;
+            }
+            
+            updateConnectionStatus('connected', 'Connected');
+            document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+            
+            // Battery
+            if (data.battery) {
+                updateBattery(data.battery);
+            }
+            
+            // Storage
+            if (data.storage) {
+                updateStorage(data.storage);
+            }
+            
+            // Thermal
+            if (data.thermal) {
+                updateThermal(data.thermal);
+            }
+            
+            // Network
+            if (data.network) {
+                updateNetwork(data.network);
+            }
+            
+            // Apps
+            if (data.apps) {
+                updateApps(data.apps);
+            }
+            
+            // Device
+            if (data.device) {
+                updateDevice(data.device);
+            }
+            
+            // Overall status
+            updateOverallStatus(data);
+        }
+        
+        function updateBattery(b) {
+            document.getElementById('battery-level').textContent = `${b.level}%`;
+            document.getElementById('battery-level').className = `metric-value ${b.level < 20 ? 'critical' : b.level < 50 ? 'warning' : 'good'}`;
+            
+            document.getElementById('battery-health').textContent = b.health;
+            document.getElementById('battery-health').className = `metric-value ${b.health === 'GOOD' ? 'good' : 'warning'}`;
+            
+            document.getElementById('battery-status').textContent = b.status;
+            document.getElementById('battery-temp').textContent = `${b.temperature_c}°C / ${b.temperature_f}°F`;
+            document.getElementById('battery-temp').className = `metric-value ${b.temperature_c > 40 ? 'critical' : b.temperature_c > 35 ? 'warning' : 'good'}`;
+            
+            document.getElementById('battery-voltage').textContent = `${b.voltage_mv} mV`;
+            document.getElementById('battery-current').textContent = `${b.current_ma} mA`;
+            document.getElementById('battery-cycles').textContent = b.charge_cycles || 'N/A';
+            
+            // Update chart
+            const now = new Date();
+            charts.battery.data.labels.push(now);
+            charts.battery.data.datasets[0].data.push(b.level);
+            charts.battery.data.datasets[1].data.push(b.temperature_c);
+            
+            // Keep last 60 points
+            if (charts.battery.data.labels.length > 60) {
+                charts.battery.data.labels.shift();
+                charts.battery.data.datasets[0].data.shift();
+                charts.battery.data.datasets[1].data.shift();
+            }
+            charts.battery.update('none');
+        }
+        
+        function updateStorage(partitions) {
+            const container = document.getElementById('storage-partitions');
+            container.innerHTML = '';
+            
+            const chartLabels = [];
+            const chartData = [];
+            
+            partitions.forEach(p => {
+                const row = document.createElement('div');
+                row.className = 'metric-row';
+                row.innerHTML = `
+                    <span class="metric-label">${p.mount_point}</span>
+                    <span class="metric-value ${p.usage_percent > 85 ? 'critical' : p.usage_percent > 70 ? 'warning' : ''}">
+                        ${p.usage_percent.toFixed(1)}% (${p.free_gb.toFixed(1)}GB free)
+                    </span>
+                `;
+                container.appendChild(row);
+                
+                chartLabels.push(p.mount_point.replace('/','').replace('data','Data').replace('system','System'));
+                chartData.push(p.usage_percent);
+            });
+            
+            charts.storage.data.labels = chartLabels;
+            charts.storage.data.datasets[0].data = chartData;
+            charts.storage.update();
+        }
+        
+        function updateThermal(t) {
+            document.getElementById('thermal-status').textContent = t.overall_status.toUpperCase();
+            document.getElementById('thermal-status').className = `metric-value ${t.overall_status === 'critical' ? 'critical' : t.overall_status === 'warning' ? 'warning' : 'good'}`;
+            
+            document.getElementById('thermal-cpu').textContent = t.cpu_throttling ? 'YES ⚠️' : 'No';
+            document.getElementById('thermal-cpu').className = `metric-value ${t.cpu_throttling ? 'critical' : 'good'}`;
+            
+            document.getElementById('thermal-gpu').textContent = t.gpu_throttling ? 'YES ⚠️' : 'No';
+            document.getElementById('thermal-gpu').className = `metric-value ${t.gpu_throttling ? 'critical' : 'good'}`;
+            
+            const zonesContainer = document.getElementById('thermal-zones');
+            zonesContainer.innerHTML = '';
+            
+            let maxTemp = 0;
+            t.zones.forEach(z => {
+                if (z.temp_c > 0) {
+                    maxTemp = Math.max(maxTemp, z.temp_c);
+                    const badge = document.createElement('span');
+                    badge.className = `zone-badge ${z.is_critical ? 'critical' : z.temp_c > 45 ? 'warning' : 'normal'}`;
+                    badge.textContent = `${z.name}: ${z.temp_c.toFixed(1)}°C (${z.type})`;
+                    zonesContainer.appendChild(badge);
+                }
+            });
+            
+            // Update chart
+            const now = new Date();
+            charts.thermal.data.labels.push(now);
+            charts.thermal.data.datasets[0].data.push(maxTemp);
+            
+            if (charts.thermal.data.labels.length > 60) {
+                charts.thermal.data.labels.shift();
+                charts.thermal.data.datasets[0].data.shift();
+            }
+            charts.thermal.update('none');
+        }
+        
+        function updateNetwork(n) {
+            const isWifi = n.wifi_connected;
+            const isMobile = n.mobile_connected;
+            
+            document.getElementById('network-type').textContent = isWifi ? 'Wi-Fi' : isMobile ? 'Mobile' : 'None';
+            document.getElementById('network-name').textContent = isWifi ? n.wifi_ssid : isMobile ? n.mobile_operator : 'N/A';
+            
+            const signal = isWifi ? n.wifi_signal_dbm : n.mobile_signal_dbm;
+            document.getElementById('network-signal').textContent = `${signal} dBm`;
+            document.getElementById('network-signal').className = `metric-value ${signal < -90 ? 'critical' : signal < -75 ? 'warning' : 'good'}`;
+            
+            document.getElementById('network-internet').textContent = n.internet_reachable ? '✅ Connected' : '❌ Offline';
+            document.getElementById('network-internet').className = `metric-value ${n.internet_reachable ? 'good' : 'critical'}`;
+            
+            document.getElementById('network-gateway').textContent = n.gateway || 'N/A';
+            document.getElementById('network-dns').textContent = n.dns_servers?.join(', ') || 'N/A';
+        }
+        
+        function updateApps(a) {
+            document.getElementById('apps-count').textContent = a.running_count;
+            
+            const list = document.getElementById('apps-list');
+            list.innerHTML = '';
+            
+            if (a.running && a.running.length > 0) {
+                a.running.slice(0, 8).forEach(app => {
+                    const row = document.createElement('div');
+                    row.className = 'metric-row';
+                    row.style.fontSize = '0.85rem';
+                    row.innerHTML = `
+                        <span class="metric-label">${app}</span>
+                        <span class="metric-value">Running</span>
+                    `;
+                    list.appendChild(row);
+                });
+                if (a.running.length > 8) {
+                    const row = document.createElement('div');
+                    row.className = 'metric-row';
+                    row.style.fontSize = '0.85rem';
+                    row.innerHTML = `<span class="metric-label">+${a.running.length - 8} more...</span><span class="metric-value"></span>`;
+                    list.appendChild(row);
+                }
+            } else {
+                list.innerHTML = '<div class="metric-row"><span class="metric-label">No running apps detected</span></div>';
+            }
+        }
+        
+        function updateDevice(d) {
+            document.getElementById('device-model').textContent = d.model;
+            document.getElementById('device-android').textContent = d.android_version;
+            document.getElementById('device-api').textContent = d.api_level;
+            document.getElementById('device-patch').textContent = d.security_patch || 'Unknown';
+        }
+        
+        function updateOverallStatus(data) {
+            // Determine overall status from thermal, battery, storage
+            let status = 'healthy';
+            
+            if (data.thermal && (data.thermal.overall_status === 'critical' || data.thermal.cpu_throttling || data.thermal.gpu_throttling)) {
+                status = 'critical';
+            } else if (data.battery && (data.battery.level < 15 || data.battery.temperature_c > 45 || data.battery.health !== 'GOOD')) {
+                status = 'critical';
+            } else if (data.storage && data.storage.some(p => p.usage_percent > 90)) {
+                status = 'critical';
+            } else if (data.thermal && data.thermal.overall_status === 'warning') {
+                status = 'warning';
+            } else if (data.battery && (data.battery.level < 30 || data.battery.temperature_c > 40)) {
+                status = 'warning';
+            } else if (data.storage && data.storage.some(p => p.usage_percent > 80)) {
+                status = 'warning';
+            } else if (data.network && !data.network.internet_reachable) {
+                status = 'warning';
+            }
+            
+            const el = document.getElementById('overall-status');
+            el.textContent = status.toUpperCase();
+            el.className = `status ${status}`;
+        }
+        
+        // Refresh data via REST API
+        async function refreshData() {
+            const btn = document.getElementById('refresh-btn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Refreshing...';
+            
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                updateDashboard(data);
+            } catch (error) {
+                console.error('Refresh failed:', error);
+                updateConnectionStatus('disconnected', 'Error fetching data');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔄 Refresh Now';
+            }
+        }
+        
+        // Run diagnostics
+        async function runDiagnostics() {
+            const btn = document.getElementById('diagnostics-btn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Running...';
+            
+            try {
+                const response = await fetch('/api/diagnostics/run', { method: 'POST' });
+                const result = await response.json();
+                alert(`Diagnostics completed: ${result.status} (exit code: ${result.exit_code})`);
+                refreshData();
+            } catch (error) {
+                console.error('Diagnostics failed:', error);
+                alert('Failed to run diagnostics');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🏥 Run Diagnostics';
+            }
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+            connectWebSocket();
+            refreshData(); // Initial load via REST
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "galaxy-s22-toolkit-skills"
+version = "1.0.0"
+description = "Meta-package for all Galaxy S22+ ZCode skills - installs phone-diagnostics, phone-screen-control, phone-file-transfer, phone-logcat, phone-app-manager"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Galaxy S22+ Toolkit", email = "user@example.com"}
+]
+keywords = ["android", "adb", "samsung", "galaxy", "diagnostics", "phone", "mobile", "zcode", "skills"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: System :: Monitoring",
+]
+dependencies = [
+    "galaxy-s22-toolkit>=0.1.0",
+    "phone-diagnostics>=1.0.0",
+    "phone-screen-control>=1.0.0",
+    "phone-file-transfer>=1.0.0",
+    "phone-logcat>=1.0.0",
+    "phone-app-manager>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-mock>=3.12.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/user/galaxy-s22-toolkit"
+Repository = "https://github.com/user/galaxy-s22-toolkit"
+Issues = "https://github.com/user/galaxy-s22-toolkit/issues"

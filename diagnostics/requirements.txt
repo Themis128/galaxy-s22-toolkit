@@ -1,0 +1,6 @@
+# Diagnostics module dependencies
+pyyaml>=6.0
+requests>=2.31.0
+
+# For Windows toast notifications (optional)
+# winrt>=1.1.0
