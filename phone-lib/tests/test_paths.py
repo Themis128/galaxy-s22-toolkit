@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 import phone.termux as termux_mod
@@ -31,15 +33,30 @@ class TestConfinedPath:
             confined_path(tmp_path, "C:\\Windows\\system32\\evil.txt")
 
     def test_rejects_symlink_escape(self, tmp_path):
-        outside_dir = tmp_path / "outside"
-        outside_dir.mkdir()
+        # The escape target must live OUTSIDE the root: a junction to a
+        # sibling of tmp_path resolves out of it and must be rejected.
+        import shutil
+        import subprocess
+        import tempfile
+
+        real_outside = Path(tempfile.mkdtemp(prefix="paths-escape-"))
         link = tmp_path / "link"
         try:
-            link.symlink_to(outside_dir, target_is_directory=True)
-        except OSError:
-            pytest.skip("symlink not permitted on this system")
-        with pytest.raises(PathEscapeError):
-            confined_path(tmp_path, link / "x.txt")
+            try:
+                link.symlink_to(real_outside, target_is_directory=True)
+            except OSError:
+                # Real symlinks need privileges on Windows; a directory
+                # junction does not, and Path.resolve() follows it too.
+                result = subprocess.run(
+                    ["cmd", "/c", "mklink", "/J", str(link), str(real_outside)],
+                    capture_output=True,
+                )
+                if result.returncode != 0:
+                    pytest.skip("neither symlink nor junction permitted on this system")
+            with pytest.raises(PathEscapeError):
+                confined_path(tmp_path, link / "x.txt")
+        finally:
+            shutil.rmtree(real_outside, ignore_errors=True)
 
 
 def _fake_logcat(*filters, format="threadtime", lines=1000):

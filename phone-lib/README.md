@@ -90,6 +90,56 @@ asyncio.run(main())
 | `thermal` | `ThermalModule` | Thermal zones, throttling status |
 | `apps` | `AppsModule` | Package management, permissions |
 | `screen` | `ScreenModule` | Screenshots, recording, UI dumps |
+| `repair` | `RepairModule` | Approved repair actions with persistent JSONL history |
+| `notify` | `DesktopNotifier` | Windows toast notifications with Approve/Deny buttons |
+| `paths` | `confined_path` | Path confinement (resolve + fixed-root verification) |
+
+## Repair Actions
+
+`phone.repair.RepairModule` provides ~20 audited repair actions (storage,
+apps, network, logcat). Approval policy: actions flagged `auto_approve` or
+matching the configured `auto_approve_risk_levels` run without prompting;
+everything else requires an explicit approval (toast buttons or callback).
+Every executed result is appended to a JSONL history file and reloaded on
+the next run.
+
+```python
+from phone.repair import RepairModule
+
+repair = RepairModule(client, history_path="logs/repair_history.jsonl")
+results = await repair.execute_multiple(["clear_app_caches", "flush_dns"])
+```
+
+Actions that need root (e.g. tombstone/ANR cleanup) are flagged
+`requires_root=True` and report an honest failure on unrooted devices
+instead of a silent no-op. Network toggles always attempt re-enable so a
+half-failed reset never leaves a radio off.
+
+## Desktop Notifications
+
+```python
+from phone.notify import DesktopNotifier
+
+notifier = DesktopNotifier(app_id="Galaxy S22+ Toolkit",
+                           dashboard_url="http://127.0.0.1:8081")
+notifier.notify("Health check", "All checks passed")
+approved = await notifier.request_approval_async(
+    "Repair: reset_wifi", "Toggles Wi-Fi off/on", timeout_s=120)
+```
+
+Requires the optional `notify` extra (`pip install galaxy-s22-toolkit[notify]`,
+Windows only). Timeout counts as denial.
+
+## Path Confinement
+
+```python
+from phone.paths import confined_path, PathEscapeError
+
+target = confined_path(root_dir, user_supplied)  # raises PathEscapeError
+```
+
+Every file write in the library resolves its candidate against a fixed
+root and rejects `..` segments outright.
 
 ## Data Models
 

@@ -1,0 +1,43 @@
+# Galaxy S22+ Dashboard
+
+FastAPI + WebSocket + Chart.js monitoring dashboard with an approved-repair
+API and a Devin control API (API-key protected for Tailscale use).
+
+## Run
+
+```bash
+# from the repo root
+python dashboard/app.py          # http://127.0.0.1:8081
+DASHBOARD_PORT=9000 python dashboard/app.py
+```
+
+Port 8080 is commonly occupied on this machine (env-manager-frontend), so
+the default is 8081.
+
+## Monitoring
+
+- `GET /api/health` — current snapshot (device, battery, storage, network, thermal)
+- `GET /api/history?hours=24` — time-series metrics
+- `WS /ws/live` — 1s real-time updates (5s collector cadence)
+
+## Repair API
+
+| Endpoint | Behavior |
+|---|---|
+| `GET /api/repair/actions` | Recommended actions from the latest saved diagnostics report (no re-run) |
+| `POST /api/repair/execute` | Runs one action. Non-auto-approve actions require `"confirm": true`, else **202 confirmation_required**. Unknown actions → 400. |
+| `POST /api/repair/execute-multiple` | Same gate for any non-auto action in the batch |
+| `GET /api/repair/history` | Persistent repair history (JSONL from `logs/repair_history.jsonl`) |
+
+Every executed repair fires a desktop toast (best-effort) and is appended
+to the shared repair history the CLI uses.
+
+## Devin Control API
+
+`/api/devin/*` requires the `X-API-Key` header (set `GROQ_BOT_API_KEY`;
+optionally restrict callers with `TAILSCALE_ALLOWLIST`).
+
+## Mobile
+
+The UI is responsive (44px touch targets, single-column layout) for
+phone access over Tailscale.

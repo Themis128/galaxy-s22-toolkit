@@ -87,7 +87,9 @@ class DiagnosticsRunner:
         """Set up logging configuration."""
         log_config = self.config.notifications.get('log_file', {})
         if log_config.get('enabled', True):
-            log_path = Path(log_config.get('path', 'logs/diagnostics.log'))
+            # Anchored to the package dir like the reports, so the log lands
+            # in the same place regardless of the caller's working directory
+            log_path = self.output_root / log_config.get('path', 'logs/diagnostics.log')
             log_path.parent.mkdir(parents=True, exist_ok=True)
             
             logging.basicConfig(
