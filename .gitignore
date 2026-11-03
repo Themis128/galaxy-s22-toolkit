@@ -30,6 +30,9 @@ data/
 /diagnostics/logs/
 /diagnostics/reports/
 
+# --- glm-hammer plugin workflow state ---
+.glm-hammer/
+
 # --- Legacy OneDrive placeholder directory (do not use; see README) ---
 storage/
 

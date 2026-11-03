@@ -82,21 +82,21 @@ class RepairModule:
         ),
         RepairAction(
             name="remove_tombstones",
-            description="Remove old tombstone crash dumps from /data/tombstones",
+            description="Remove old tombstone crash dumps from /data/tombstones (needs root)",
             category="storage",
             risk_level="low",
-            requires_root=False,
+            requires_root=True,
             estimated_duration_s=10,
-            auto_approve=True,
+            auto_approve=False,
         ),
         RepairAction(
             name="remove_anr_traces",
-            description="Remove old ANR trace files from /data/anr",
+            description="Remove old ANR trace files from /data/anr (needs root)",
             category="storage",
             risk_level="low",
-            requires_root=False,
+            requires_root=True,
             estimated_duration_s=10,
-            auto_approve=True,
+            auto_approve=False,
         ),
         RepairAction(
             name="identify_large_files",
@@ -137,12 +137,12 @@ class RepairModule:
         ),
         RepairAction(
             name="reset_app_preferences",
-            description="Reset all app preferences (default apps, disabled apps, permissions)",
+            description="Reset runtime permissions to defaults (apps re-request on next use)",
             category="apps",
-            risk_level="low",
+            risk_level="medium",
             requires_root=False,
             estimated_duration_s=10,
-            auto_approve=True,
+            auto_approve=False,
         ),
         # Network repairs
         RepairAction(
@@ -553,76 +553,90 @@ class RepairModule:
         )
 
     async def _repair_remove_tombstones(self, **kwargs) -> RepairResult:
-        """Remove old tombstone crash dumps."""
+        """Remove old tombstone crash dumps (requires root)."""
+        action = next(a for a in self.AVAILABLE_ACTIONS if a.name == "remove_tombstones")
         try:
-            # Count tombstones
             count_out = await self.client.execute_async("shell",
                 "ls -1 /data/tombstones/ 2>/dev/null | wc -l")
             count = int(count_out.strip())
+            new_count = count
 
             if count > 0:
-                # Remove tombstones older than 3 days
                 await self.client.execute_async("shell",
                     "find /data/tombstones -type f -mtime +3 -delete 2>/dev/null")
-
                 new_count_out = await self.client.execute_async("shell",
                     "ls -1 /data/tombstones/ 2>/dev/null | wc -l")
                 new_count = int(new_count_out.strip())
-                removed = count - new_count
-            else:
-                removed = 0
+
+            removed = count - new_count
+            if count > 0 and removed == 0:
+                # The shell user cannot write /data/tombstones without root
+                return RepairResult(
+                    action=action,
+                    success=False,
+                    message=f"Cannot delete tombstones without root ({count} present)",
+                    details={"removed": 0, "remaining": new_count, "requires_root": True},
+                )
 
             return RepairResult(
-                action=next(a for a in self.AVAILABLE_ACTIONS if a.name == "remove_tombstones"),
+                action=action,
                 success=True,
                 message=f"Removed {removed} tombstone files ({new_count} remaining)",
                 details={"removed": removed, "remaining": new_count},
             )
         except Exception as e:
             return RepairResult(
-                action=next(a for a in self.AVAILABLE_ACTIONS if a.name == "remove_tombstones"),
+                action=action,
                 success=False,
                 message=f"Failed to remove tombstones: {e}",
             )
 
     async def _repair_remove_anr_traces(self, **kwargs) -> RepairResult:
-        """Remove old ANR trace files."""
+        """Remove old ANR trace files (requires root)."""
+        action = next(a for a in self.AVAILABLE_ACTIONS if a.name == "remove_anr_traces")
         try:
             count_out = await self.client.execute_async("shell",
                 "ls -1 /data/anr/ 2>/dev/null | wc -l")
             count = int(count_out.strip())
+            new_count = count
 
             if count > 0:
                 await self.client.execute_async("shell",
                     "find /data/anr -type f -mtime +3 -delete 2>/dev/null")
-
                 new_count_out = await self.client.execute_async("shell",
                     "ls -1 /data/anr/ 2>/dev/null | wc -l")
                 new_count = int(new_count_out.strip())
-                removed = count - new_count
-            else:
-                removed = 0
+
+            removed = count - new_count
+            if count > 0 and removed == 0:
+                return RepairResult(
+                    action=action,
+                    success=False,
+                    message=f"Cannot delete ANR traces without root ({count} present)",
+                    details={"removed": 0, "remaining": new_count, "requires_root": True},
+                )
 
             return RepairResult(
-                action=next(a for a in self.AVAILABLE_ACTIONS if a.name == "remove_anr_traces"),
+                action=action,
                 success=True,
                 message=f"Removed {removed} ANR traces ({new_count} remaining)",
                 details={"removed": removed, "remaining": new_count},
             )
         except Exception as e:
             return RepairResult(
-                action=next(a for a in self.AVAILABLE_ACTIONS if a.name == "remove_anr_traces"),
+                action=action,
                 success=False,
                 message=f"Failed to remove ANR traces: {e}",
             )
 
     async def _repair_identify_large_files(self, **kwargs) -> RepairResult:
-        """Find large files for manual review."""
+        """Find large files for manual review (scans /sdcard; /data needs root)."""
+        action = next(a for a in self.AVAILABLE_ACTIONS if a.name == "identify_large_files")
         try:
             threshold_mb = kwargs.get("threshold_mb", 100)
 
             output = await self.client.execute_async("shell",
-                f"find /data -type f -size +{threshold_mb}M 2>/dev/null | head -20")
+                f"find /sdcard -type f -size +{threshold_mb}M 2>/dev/null | head -20")
 
             files = []
             for line in output.strip().splitlines():
@@ -634,14 +648,14 @@ class RepairModule:
                     files.append({"path": line, "size": size})
 
             return RepairResult(
-                action=next(a for a in self.AVAILABLE_ACTIONS if a.name == "identify_large_files"),
+                action=action,
                 success=True,
-                message=f"Found {len(files)} files >{threshold_mb}MB",
+                message=f"Found {len(files)} files >{threshold_mb}MB on /sdcard",
                 details={"files": files, "threshold_mb": threshold_mb},
             )
         except Exception as e:
             return RepairResult(
-                action=next(a for a in self.AVAILABLE_ACTIONS if a.name == "identify_large_files"),
+                action=action,
                 success=False,
                 message=f"Failed to identify large files: {e}",
             )
@@ -650,22 +664,28 @@ class RepairModule:
 
     async def _repair_force_stop_misbehaving_apps(self, **kwargs) -> RepairResult:
         """Force stop apps with high resource usage or crashes."""
+        action = next(a for a in self.AVAILABLE_ACTIONS if a.name == "force_stop_misbehaving_apps")
+        stopped = []
+        crash_packages: set[str] = set()
+        discovery_error = None
+
+        # Discovery phase: tolerate failures and degrade gracefully
         try:
-            # Get running apps with stats
             running = self.apps.get_running_apps()
+        except Exception as e:
+            running = []
+            discovery_error = f"running apps: {e}"
 
-            # Get crash info from logcat
+        try:
             logcat_result = self.logcat.get_logs_with_stats(lines=200)
-            crashes = logcat_result["filtered_logs"]
-
-            # Find packages with crashes
-            crash_packages = set()
-            for log in crashes:
+            for log in logcat_result["filtered_logs"]:
                 if log.package:
                     crash_packages.add(log.package)
+        except Exception as e:
+            discovery_error = discovery_error or f"logcat: {e}"
 
-            stopped = []
-            for app in running[:20]:  # Check top 20
+        if running and crash_packages:
+            for app in running[:20]:  # top 20 by resource usage
                 if app in crash_packages:
                     try:
                         await self.client.execute_async("shell", f"am force-stop {app}")
@@ -673,18 +693,19 @@ class RepairModule:
                     except Exception:
                         pass
 
+        if discovery_error and not stopped:
             return RepairResult(
-                action=next(a for a in self.AVAILABLE_ACTIONS if a.name == "force_stop_misbehaving_apps"),
-                success=True,
-                message=f"Force stopped {len(stopped)} misbehaving apps",
-                details={"stopped": stopped, "crash_packages": list(crash_packages)},
-            )
-        except Exception as e:
-            return RepairResult(
-                action=next(a for a in self.AVAILABLE_ACTIONS if a.name == "force_stop_misbehaving_apps"),
+                action=action,
                 success=False,
-                message=f"Failed to force stop apps: {e}",
+                message=f"Could not identify misbehaving apps ({discovery_error})",
             )
+
+        return RepairResult(
+            action=action,
+            success=True,
+            message=f"Force stopped {len(stopped)} misbehaving apps" if stopped else "No misbehaving apps to stop",
+            details={"stopped": stopped, "crash_packages": sorted(crash_packages)[:10]},
+        )
 
     async def _repair_clear_app_data(self, **kwargs) -> RepairResult:
         """Clear data for specific apps (requires package names in kwargs)."""
@@ -742,61 +763,80 @@ class RepairModule:
         )
 
     async def _repair_reset_app_preferences(self, **kwargs) -> RepairResult:
-        """Reset all app preferences."""
+        """Reset runtime permissions to their default (denied) state."""
+        action = next(a for a in self.AVAILABLE_ACTIONS if a.name == "reset_app_preferences")
         try:
-            await self.client.execute_async("shell", "pm reset-app-preferences")
+            await self.client.execute_async("shell", "pm reset-permissions")
 
             return RepairResult(
-                action=next(a for a in self.AVAILABLE_ACTIONS if a.name == "reset_app_preferences"),
+                action=action,
                 success=True,
-                message="App preferences reset (default apps, disabled apps, permissions)",
-                details={},
+                message="Runtime permissions reset to defaults (apps will re-request on next use)",
+                details={"method": "pm reset-permissions"},
             )
         except Exception as e:
             return RepairResult(
-                action=next(a for a in self.AVAILABLE_ACTIONS if a.name == "reset_app_preferences"),
+                action=action,
                 success=False,
-                message=f"Failed to reset app preferences: {e}",
+                message=f"Failed to reset permissions: {e}",
             )
 
     # ===== Network Repairs =====
 
     async def _repair_reset_wifi(self, **kwargs) -> RepairResult:
-        """Toggle Wi-Fi off/on."""
+        """Toggle Wi-Fi off/on (re-enables even if the toggle half-fails)."""
+        action = next(a for a in self.AVAILABLE_ACTIONS if a.name == "reset_wifi")
         try:
-            await self.client.execute_async("shell", "svc wifi disable")
+            disable_error = None
+            try:
+                await self.client.execute_async("shell", "svc wifi disable")
+            except Exception as e:
+                disable_error = e
             await asyncio_sleep(2)
+            # Always attempt re-enable so the radio is never left off
             await self.client.execute_async("shell", "svc wifi enable")
 
+            if disable_error is not None:
+                raise disable_error
+
             return RepairResult(
-                action=next(a for a in self.AVAILABLE_ACTIONS if a.name == "reset_wifi"),
+                action=action,
                 success=True,
                 message="Wi-Fi toggled off/on",
                 details={},
             )
         except Exception as e:
             return RepairResult(
-                action=next(a for a in self.AVAILABLE_ACTIONS if a.name == "reset_wifi"),
+                action=action,
                 success=False,
                 message=f"Failed to reset Wi-Fi: {e}",
             )
 
     async def _repair_reset_mobile_data(self, **kwargs) -> RepairResult:
-        """Toggle mobile data off/on."""
+        """Toggle mobile data off/on (re-enables even if the toggle half-fails)."""
+        action = next(a for a in self.AVAILABLE_ACTIONS if a.name == "reset_mobile_data")
         try:
-            await self.client.execute_async("shell", "svc data disable")
+            disable_error = None
+            try:
+                await self.client.execute_async("shell", "svc data disable")
+            except Exception as e:
+                disable_error = e
             await asyncio_sleep(2)
+            # Always attempt re-enable so the radio is never left off
             await self.client.execute_async("shell", "svc data enable")
 
+            if disable_error is not None:
+                raise disable_error
+
             return RepairResult(
-                action=next(a for a in self.AVAILABLE_ACTIONS if a.name == "reset_mobile_data"),
+                action=action,
                 success=True,
                 message="Mobile data toggled off/on",
                 details={},
             )
         except Exception as e:
             return RepairResult(
-                action=next(a for a in self.AVAILABLE_ACTIONS if a.name == "reset_mobile_data"),
+                action=action,
                 success=False,
                 message=f"Failed to reset mobile data: {e}",
             )

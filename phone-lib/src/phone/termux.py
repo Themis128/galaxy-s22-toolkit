@@ -246,21 +246,23 @@ class TermuxClient:
         """
         Create a boot script for Termux.
 
-        Boot scripts run automatically when the device boots.
-        Location: ~/.termux/boot/
+        Boot scripts run automatically at device boot and live in
+        ~/.termux/boot/. ``script_path`` is confined inside that directory:
+        ``..`` segments resolving outside are rejected with PathEscapeError.
         """
+        from .paths import confined_path
+
         boot_dir = os.path.expanduser("~/.termux/boot")
         os.makedirs(boot_dir, exist_ok=True)
 
-        full_path = os.path.join(boot_dir, script_path)
+        full_path = confined_path(boot_dir, os.path.join(boot_dir, script_path))
         with open(full_path, "w") as f:
             f.write(content)
 
         # Make executable
         os.chmod(full_path, 0o755)
 
-        return full_path
-
+        return str(full_path)
 
 class TermuxBootManager:
     """Manager for Termux boot scripts."""

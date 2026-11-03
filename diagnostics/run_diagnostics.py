@@ -73,6 +73,7 @@ class DiagnosticsRunner:
         self.client = None
         self.results: list[CheckResult] = []
         self.start_time = datetime.now()
+        self.output_root = Path(__file__).resolve().parent
         self._setup_logging()
     
     def _load_config(self) -> DiagnosticConfig:
@@ -533,46 +534,61 @@ class DiagnosticsRunner:
         """Save reports to files."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         date_str = datetime.now().strftime("%Y-%m-%d")
-        
+
         # JSON report
         if self.config.output.get('json_report', {}).get('enabled', True):
-            json_path = self.config.output['json_report']['path'].replace("{{date}}", date_str)
-            json_path = json_path.replace("{{timestamp}}", timestamp)
-            json_file = Path(json_path)
+            template = self.config.output['json_report']['path']
+            json_file = self._report_file(template, date_str, timestamp)
             json_file.parent.mkdir(parents=True, exist_ok=True)
-            
+
             # Remove read-only attribute on Windows
             self._make_writable(json_file)
-            
+
             with open(json_file, 'w') as f:
                 json.dump(asdict(report), f, indent=2, default=str)
             self.logger.info(f"JSON report saved to {json_file}")
-        
+
         # Summary report
         if self.config.output.get('summary_report', {}).get('enabled', True):
-            summary_path = self.config.output['summary_report']['path'].replace("{{date}}", date_str)
-            summary_path = summary_path.replace("{{timestamp}}", timestamp)
-            summary_file = Path(summary_path)
+            template = self.config.output['summary_report']['path']
+            summary_file = self._report_file(template, date_str, timestamp)
             summary_file.parent.mkdir(parents=True, exist_ok=True)
-            
+
             # Remove read-only attribute on Windows
             self._make_writable(summary_file)
-            
+
             with open(summary_file, 'w') as f:
                 f.write(self.format_summary(report))
             self.logger.info(f"Summary report saved to {summary_file}")
-        
+
         # Cleanup old reports
         self._cleanup_old_reports()
-    
+
+    def _report_file(self, template: str, date_str: str, timestamp: str) -> Path:
+        """Build a report path from a config template.
+
+        The diagnostics package directory is the fixed root: the template is
+        resolved against it and must land inside. ``..`` segments or absolute
+        paths pointing elsewhere raise PathEscapeError.
+        """
+        from phone.paths import confined_path
+
+        substituted = str(template).replace("{{date}}", date_str).replace("{{timestamp}}", timestamp)
+        return confined_path(self.output_root, self.output_root / substituted)
+
     def _cleanup_old_reports(self) -> None:
         """Remove reports older than retention_days."""
         retention = self.config.output.get('retention_days', 30)
         cutoff = datetime.now() - timedelta(days=retention)
-        
-        for pattern in ["reports/health_report_*.json", "reports/summary_*.txt"]:
-            for file in Path(".").glob(pattern):
+
+        from phone.paths import confined_path
+
+        reports_root = (self.output_root / "reports").resolve()
+        for pattern in ["health_report_*.json", "summary_*.txt"]:
+            for file in reports_root.glob(pattern):
                 try:
+                    # Only ever delete inside the reports root
+                    confined_path(reports_root, file)
                     # Extract date from filename
                     mtime = datetime.fromtimestamp(file.stat().st_mtime)
                     if mtime < cutoff:

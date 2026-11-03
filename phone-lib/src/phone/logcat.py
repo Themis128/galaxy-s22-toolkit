@@ -6,6 +6,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from .adb import AdbClient
@@ -748,10 +749,25 @@ class LogcatModule:
         *filters: str,
         format: str = "threadtime",
         lines: int = 1000,
+        base_dir: str | Path | None = None,
     ) -> int:
-        """Save logs to file, returns number of entries saved."""
+        """Save logs to file, returns number of entries saved.
+
+        ``file_path`` is confined inside ``base_dir`` (default ``./logs``):
+        ``..`` segments or symlinks resolving outside the base are rejected
+        with :class:`PathEscapeError`. Pass ``base_dir`` explicitly to allow
+        a different export location; the confinement still applies within it.
+        """
+        from .paths import confined_path
+
+        base = Path(base_dir) if base_dir else Path("logs")
+        # Bare names and relative paths land inside the base; absolute paths
+        # and any ".." segments must still resolve inside it.
+        target = confined_path(base, Path(base) / file_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+
         logs = self.client.logcat(*filters, format=format, lines=lines)
-        with open(file_path, "w", encoding="utf-8") as f:
+        with open(target, "w", encoding="utf-8") as f:
             for log in logs:
                 f.write(log.raw + "\n")
         return len(logs)
