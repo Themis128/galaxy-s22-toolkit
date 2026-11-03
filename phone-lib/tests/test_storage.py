@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
 from phone.storage import StorageModule
-from phone.models import StorageInfo
 
 
 class TestStorageModule:
@@ -15,9 +12,9 @@ class TestStorageModule:
         """Test parsing storage info from df output."""
         module = StorageModule(mock_adb_client)
         storages = module.get_storage_info()
-        
+
         assert len(storages) == 4  # /, /data, /cache, /sdcard
-        
+
         # Check /data partition
         data_storage = next((s for s in storages if s.mount_point == "/data"), None)
         assert data_storage is not None
@@ -29,7 +26,7 @@ class TestStorageModule:
         """Get /data partition specifically."""
         module = StorageModule(mock_adb_client)
         data = module.get_data_storage()
-        
+
         assert data is not None
         assert data.mount_point == "/data"
         assert data.filesystem == "f2fs"
@@ -38,7 +35,7 @@ class TestStorageModule:
         """Get internal storage (/sdcard)."""
         module = StorageModule(mock_adb_client)
         internal = module.get_internal_storage()
-        
+
         assert internal is not None
         assert internal.mount_point == "/sdcard"
         assert internal.filesystem == "vfat"
@@ -47,7 +44,7 @@ class TestStorageModule:
         """Get total space across all partitions."""
         module = StorageModule(mock_adb_client)
         total = module.get_total_space()
-        
+
         # Sum of all partition totals in bytes
         expected = (2097152 + 5242880 + 1048576 + 52428800) * 1024
         assert total == expected
@@ -56,7 +53,7 @@ class TestStorageModule:
         """Get used space across all partitions."""
         module = StorageModule(mock_adb_client)
         used = module.get_used_space()
-        
+
         expected = (1200000 + 3500000 + 800000 + 40000000) * 1024
         assert used == expected
 
@@ -64,14 +61,14 @@ class TestStorageModule:
         """Get free space across all partitions."""
         module = StorageModule(mock_adb_client)
         free = module.get_free_space()
-        
+
         expected = (897152 + 1742880 + 248576 + 12428800) * 1024
         assert free == expected
 
     def test_filesystem_guessing(self, mock_adb_client):
         """Test filesystem type guessing from mount points."""
         module = StorageModule(mock_adb_client)
-        
+
         assert module._guess_filesystem("/") == "ext4"
         assert module._guess_filesystem("/system") == "ext4"
         assert module._guess_filesystem("/vendor") == "ext4"
@@ -90,7 +87,7 @@ class TestStorageModule:
 """
         module = StorageModule(mock_adb_client)
         files = module.find_large_files("/data", min_size_mb=50, limit=10)
-        
+
         assert len(files) == 3
         assert files[0]["path"] == "/data/large_file.dat"
         assert files[0]["size_mb"] == 200.0
@@ -101,13 +98,13 @@ class TestStorageModule:
         """Test parsing /proc/mounts."""
         module = StorageModule(mock_adb_client)
         partitions = module.get_mounted_partitions()
-        
+
         assert len(partitions) >= 2
         # Check /data partition
         data_part = next((p for p in partitions if p["mount_point"] == "/data"), None)
         assert data_part is not None
         assert data_part["filesystem"] == "f2fs"
-        
+
         # Check /sdcard partition
         sdcard_part = next((p for p in partitions if p["mount_point"] == "/sdcard"), None)
         assert sdcard_part is not None

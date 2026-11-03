@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
-
-from phone.thermal import ThermalModule
 from phone.models import ThermalInfo, ThermalStatus, ThermalZone
+from phone.thermal import ThermalModule
 
 
 class TestThermalModule:
@@ -15,7 +13,7 @@ class TestThermalModule:
         """Test getting thermal info."""
         module = ThermalModule(mock_adb_client)
         thermal = module.get_thermal_info()
-        
+
         assert isinstance(thermal, ThermalInfo)
         assert len(thermal.zones) == 5
         assert thermal.status == ThermalStatus.NORMAL
@@ -26,15 +24,15 @@ class TestThermalModule:
         """Test getting thermal zones from sysfs."""
         module = ThermalModule(mock_adb_client)
         zones = module.get_thermal_zones()
-        
+
         assert len(zones) == 5
         assert all(isinstance(zone, ThermalZone) for zone in zones)
-        
+
         # Check specific zones
         cpu0 = next((z for z in zones if z.name == "thermal_zone0"), None)
         assert cpu0 is not None
         assert cpu0.temp_c == 35.0  # 35000 millicelsius
-        
+
         battery = next((z for z in zones if z.name == "thermal_zone3"), None)
         assert battery is not None
         assert battery.temp_c == 45.0  # 45000 millicelsius
@@ -65,10 +63,10 @@ Thermal zones:
 Throttling: throttled
 """,
         }.get(args, "")
-        
+
         module = ThermalModule(mock_adb_client)
         thermal = module.get_thermal_info()
-        
+
         # At 55°C with throttling, status should be THROTTLED (max < 85°C)
         assert thermal.status == ThermalStatus.THROTTLED
         assert thermal.cpu_throttled is True
@@ -84,5 +82,5 @@ Throttling: throttled
 """
         module = ThermalModule(mock_adb_client)
         thermal = module.get_thermal_info()
-        
+
         assert thermal.cpu_throttled is True

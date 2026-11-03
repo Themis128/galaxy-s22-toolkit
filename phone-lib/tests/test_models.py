@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
-import pytest
-
 from phone.models import (
     BatteryHealth,
     BatteryInfo,
@@ -177,7 +173,7 @@ class TestLogEntry:
     def test_parse_brief_format(self):
         line = "D/MainActivity(1234): onCreate called"
         entry = LogEntry.parse_brief(line)
-        
+
         assert entry is not None
         assert entry.level == LogLevel.DEBUG
         assert entry.tag == "MainActivity"
@@ -188,7 +184,7 @@ class TestLogEntry:
     def test_parse_brief_error_level(self):
         line = "E/DatabaseHelper(5678): Failed to connect"
         entry = LogEntry.parse_brief(line)
-        
+
         assert entry is not None
         assert entry.level == LogLevel.ERROR
         assert entry.tag == "DatabaseHelper"
@@ -197,7 +193,7 @@ class TestLogEntry:
     def test_parse_threadtime_format(self):
         line = "11-01 14:32:45.123  1234  1235 D MainActivity: onCreate called"
         entry = LogEntry.parse_threadtime(line)
-        
+
         assert entry is not None
         assert entry.level == LogLevel.DEBUG
         assert entry.tag == "MainActivity"
@@ -213,7 +209,7 @@ class TestLogEntry:
     def test_parse_threadtime_error(self):
         line = "11-01 14:32:45.456  5678  5678 E AndroidRuntime: FATAL EXCEPTION: main"
         entry = LogEntry.parse_threadtime(line)
-        
+
         assert entry is not None
         assert entry.level == LogLevel.ERROR
         assert entry.tag == "AndroidRuntime"
@@ -223,7 +219,7 @@ class TestLogEntry:
     def test_parse_invalid_line_returns_none(self):
         entry = LogEntry.parse_brief("invalid line")
         assert entry is None
-        
+
         entry = LogEntry.parse_threadtime("invalid line")
         assert entry is None
 
@@ -320,8 +316,16 @@ class TestHealthReport:
     """Tests for HealthReport model."""
 
     def test_health_report_creation(self):
-        from phone.models import HealthReport, DeviceInfo, BatteryInfo, BatteryHealth, BatteryStatus, StorageInfo, NetworkInfo
-        
+        from phone.models import (
+            BatteryHealth,
+            BatteryInfo,
+            BatteryStatus,
+            DeviceInfo,
+            HealthReport,
+            NetworkInfo,
+            StorageInfo,
+        )
+
         report = HealthReport(
             device=DeviceInfo(
                 serial="RFCTA0AEKZP",
@@ -362,7 +366,7 @@ class TestHealthReport:
                 internet_reachable=True,
             ),
         )
-        
+
         assert report.device.model == "SM-S906B"
         assert report.battery.level == 75
         assert len(report.storage) == 1
@@ -370,16 +374,24 @@ class TestHealthReport:
 
     def test_is_healthy_property(self):
         from phone.models import HealthReport
-        
+
         healthy_report = HealthReport(issues=[])
         assert healthy_report.is_healthy is True
-        
+
         unhealthy_report = HealthReport(issues=["Battery critical"])
         assert unhealthy_report.is_healthy is False
 
     def test_summary_property(self):
-        from phone.models import HealthReport, DeviceInfo, BatteryInfo, BatteryHealth, BatteryStatus, StorageInfo, NetworkInfo
-        
+        from phone.models import (
+            BatteryHealth,
+            BatteryInfo,
+            BatteryStatus,
+            DeviceInfo,
+            HealthReport,
+            NetworkInfo,
+            StorageInfo,
+        )
+
         report = HealthReport(
             device=DeviceInfo(
                 serial="RFCTA0AEKZP",
@@ -420,7 +432,7 @@ class TestHealthReport:
                 internet_reachable=True,
             ),
         )
-        
+
         summary = report.summary
         assert "Battery: 75%" in summary
         assert "Storage:" in summary

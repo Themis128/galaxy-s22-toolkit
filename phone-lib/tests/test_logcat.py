@@ -1,7 +1,7 @@
 """Unit tests for logcat module."""
 
+from phone.logcat import FilterConfig, LogcatModule
 from phone.models import LogEntry, LogLevel
-from phone.logcat import LogcatModule, FilterConfig
 
 
 class TestLogcatModule:
