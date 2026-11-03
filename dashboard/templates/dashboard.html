@@ -326,7 +326,48 @@
                     <div id="apps-list"></div>
                 </div>
             </div>
-            
+
+            <!-- CPU Card -->
+            <div class="card">
+                <div class="card-header">⚙️ CPU</div>
+                <div class="card-body">
+                    <div class="metric-row">
+                        <span class="metric-label">Cores</span>
+                        <span class="metric-value" id="cpu-count">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Per-core frequency (MHz)</span>
+                        <span class="metric-value" id="cpu-freqs">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Memory Card -->
+            <div class="card">
+                <div class="card-header">🧠 Memory</div>
+                <div class="card-body">
+                    <div class="metric-row">
+                        <span class="metric-label">Total / Available</span>
+                        <span class="metric-value" id="mem-values">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Usage</span>
+                        <span class="metric-value" id="mem-usage">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Root Card -->
+            <div class="card">
+                <div class="card-header">🔓 Root</div>
+                <div class="card-body">
+                    <div class="metric-row">
+                        <span class="metric-label">Rooted</span>
+                        <span class="metric-value" id="root-status">--</span>
+                    </div>
+                </div>
+            </div>
+
             <!-- Device Info Card -->
             <div class="card">
                 <div class="card-header">📋 Device Info</div>
@@ -535,7 +576,30 @@
             if (data.apps) {
                 updateApps(data.apps);
             }
-            
+
+            // CPU
+            if (data.cpu) {
+                document.getElementById('cpu-count').textContent = data.cpu.count;
+                const freqs = (data.cpu.per_core_mhz || []).map(f => f || '--').join(' · ');
+                document.getElementById('cpu-freqs').textContent = freqs || 'n/a';
+            }
+
+            // Memory
+            if (data.memory) {
+                document.getElementById('mem-values').textContent =
+                    `${data.memory.total_mb} MB / ${data.memory.available_mb} MB`;
+                const usage = data.memory.usage_percent;
+                document.getElementById('mem-usage').textContent = `${usage}%`;
+                document.getElementById('mem-usage').className =
+                    `metric-value ${usage > 90 ? 'critical' : usage > 75 ? 'warning' : 'good'}`;
+            }
+
+            // Root
+            if (data.root) {
+                document.getElementById('root-status').textContent =
+                    data.root.rooted ? 'Yes' : 'No';
+            }
+
             // Device
             if (data.device) {
                 updateDevice(data.device);

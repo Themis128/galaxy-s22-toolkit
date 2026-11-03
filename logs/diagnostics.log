@@ -1,0 +1,14 @@
+2026-11-03 02:58:39,856 - INFO - Starting Galaxy S22+ diagnostics
+2026-11-03 02:58:39,856 - INFO - Connected to device: RFCTA0AEKZP
+2026-11-03 02:58:40,864 - ERROR - Check 'battery' failed: 'BatteryInfo' object has no attribute 'current_ma'
+2026-11-03 02:58:41,104 - ERROR - Check 'network' failed: 'NetworkInfo' object has no attribute 'wifi_frequency_mhz'
+2026-11-03 02:58:41,920 - ERROR - Check 'thermal' failed: 'ThermalInfo' object has no attribute 'cpu_throttling'
+2026-11-03 02:58:51,205 - ERROR - Diagnostics failed: HealthReport.__init__() got an unexpected keyword argument 'checks'
+Traceback (most recent call last):
+  File "C:\Users\tbaltzakis\CrossDevice\Galaxy S22+ (2)\diagnostics\run_diagnostics.py", line 747, in run
+    report = self.generate_report()
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\tbaltzakis\CrossDevice\Galaxy S22+ (2)\diagnostics\run_diagnostics.py", line 510, in generate_report
+    report = HealthReport(
+             ^^^^^^^^^^^^^
+TypeError: HealthReport.__init__() got an unexpected keyword argument 'checks'

@@ -309,6 +309,29 @@ class AppInfo:
 
 
 @dataclass(slots=True)
+class RootInfo:
+    """Root/Magisk state reported by the device."""
+    rooted: bool = False
+    magisk_version: str | None = None
+    denylist_enabled: bool = False
+    knox_status: str = "unknown"   # unknown | intact | tripped
+    su_path: str | None = None
+    modules_dir_present: bool = False
+
+    @property
+    def model(self) -> dict:
+        """Dictionary form for JSON serialization."""
+        return {
+            "rooted": self.rooted,
+            "magisk_version": self.magisk_version,
+            "denylist_enabled": self.denylist_enabled,
+            "knox_status": self.knox_status,
+            "su_path": self.su_path,
+            "modules_dir_present": self.modules_dir_present,
+        }
+
+
+@dataclass(slots=True)
 class CpuInfo:
     """CPU information."""
     cores: int

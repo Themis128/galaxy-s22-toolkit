@@ -7,10 +7,9 @@ import os
 import shlex
 import subprocess
 import time
-from pathlib import Path
-from typing import Any
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from .exceptions import (
     AdbConnectionError,
@@ -78,6 +77,62 @@ class AdbClient:
             from .apps import AppsModule
             self._apps_module = AppsModule(self)
         return self._apps_module
+
+    @property
+    def root(self):
+        """Get RootModule instance."""
+        if not hasattr(self, '_root_module') or self._root_module is None:
+            from .root import RootModule
+            self._root_module = RootModule(self)
+        return self._root_module
+
+    @property
+    def device(self):
+        """Get DeviceModule instance."""
+        if not hasattr(self, '_device_module') or self._device_module is None:
+            from .device import DeviceModule
+            self._device_module = DeviceModule(self)
+        return self._device_module
+
+    @property
+    def battery(self):
+        """Get BatteryModule instance."""
+        if not hasattr(self, '_battery_module') or self._battery_module is None:
+            from .battery import BatteryModule
+            self._battery_module = BatteryModule(self)
+        return self._battery_module
+
+    @property
+    def storage(self):
+        """Get StorageModule instance."""
+        if not hasattr(self, '_storage_module') or self._storage_module is None:
+            from .storage import StorageModule
+            self._storage_module = StorageModule(self)
+        return self._storage_module
+
+    @property
+    def network(self):
+        """Get NetworkModule instance."""
+        if not hasattr(self, '_network_module') or self._network_module is None:
+            from .network import NetworkModule
+            self._network_module = NetworkModule(self)
+        return self._network_module
+
+    @property
+    def thermal(self):
+        """Get ThermalModule instance."""
+        if not hasattr(self, '_thermal_module') or self._thermal_module is None:
+            from .thermal import ThermalModule
+            self._thermal_module = ThermalModule(self)
+        return self._thermal_module
+
+    @property
+    def screen(self):
+        """Get ScreenModule instance."""
+        if not hasattr(self, '_screen_module') or self._screen_module is None:
+            from .screen import ScreenModule
+            self._screen_module = ScreenModule(self)
+        return self._screen_module
 
     def _find_adb(self) -> str:
         """Find ADB executable in common locations."""
@@ -179,7 +234,7 @@ class AdbClient:
                 except asyncio.TimeoutError:
                     proc.kill()
                     await proc.wait()
-                    raise TimeoutError(" ".join(cmd), timeout or self.timeout)
+                    raise TimeoutError(" ".join(cmd), timeout or self.timeout) from None
 
                 stdout_str = stdout.decode("utf-8", errors="replace") if stdout else ""
                 stderr_str = stderr.decode("utf-8", errors="replace") if stderr else ""
@@ -474,7 +529,7 @@ class AdbClient:
         pid: int | None = None,
     ):
         """Stream logcat lines as a context manager for iteration.
-        
+
         Usage:
             with client.logcat_stream_iter() as lines:
                 for line in lines:

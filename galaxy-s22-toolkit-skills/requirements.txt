@@ -24,3 +24,6 @@
 ../.zcode/skills/phone-file-transfer
 ../.zcode/skills/phone-logcat
 ../.zcode/skills/phone-app-manager
+
+# Root-support CLI (guarded; see rooting/RUNBOOK.md)
+../rooting

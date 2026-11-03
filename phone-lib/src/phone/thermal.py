@@ -53,6 +53,34 @@ class ThermalModule:
         except Exception:
             pass
 
+        # Fallback: Android 13+ SELinux blocks unrooted shell reads of thermal
+        # sysfs; dumpsys thermalservice still exposes HAL temperatures unrooted.
+        if not zones:
+            zones = self._zones_from_thermalservice()
+        return zones
+
+    def _zones_from_thermalservice(self) -> list[ThermalZone]:
+        """Parse zone temps from `dumpsys thermalservice` (works unrooted)."""
+        try:
+            output = self.client.execute("shell", "dumpsys", "thermalservice")
+        except Exception:
+            return []
+        zones: list[ThermalZone] = []
+        section = None
+        for line in output.split("\n"):
+            stripped = line.strip()
+            if stripped.startswith("Current temperatures from HAL"):
+                section = "hal"
+                continue
+            if section == "hal" and stripped.startswith("Temperature{"):
+                try:
+                    value = float(stripped.split("mValue=")[1].split(",")[0])
+                    name = stripped.split("mName=")[1].split(",")[0]
+                    zones.append(ThermalZone(name=name, temp_c=value, type="hal"))
+                except (IndexError, ValueError):
+                    continue
+            elif section == "hal" and stripped and not stripped.startswith("Temperature{"):
+                break
         return zones
 
     def _read_thermal_zone(self, zone_path: str) -> ThermalZone | None:

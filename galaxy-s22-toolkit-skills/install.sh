@@ -66,13 +66,18 @@ install_package "phone-logcat" "${SKILLS_ROOT}/phone-logcat"
 echo ""
 
 # Step 6: Install phone-app-manager
-echo -e "${BLUE}Step 6/6: Installing phone-app-manager skill${NC}"
+echo -e "${BLUE}Step 6/7: Installing phone-app-manager skill${NC}"
 install_package "phone-app-manager" "${SKILLS_ROOT}/phone-app-manager"
+echo ""
+
+# Step 7: Install phone-root (rooting support)
+echo -e "${BLUE}Step 7/7: Installing phone-root (rooting support)${NC}"
+install_package "phone-root" "${PROJECT_ROOT}/../rooting"
 echo ""
 
 # Verify all CLI commands are available
 echo -e "${BLUE}Verifying CLI commands...${NC}"
-COMMANDS=("phone-diagnostics" "phone-screen-control" "phone-file-transfer" "phone-logcat" "phone-app-manager")
+COMMANDS=("phone-diagnostics" "phone-screen-control" "phone-file-transfer" "phone-logcat" "phone-app-manager" "phone-root")
 ALL_OK=true
 
 for cmd in "${COMMANDS[@]}"; do

@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "phone-root"
+version = "0.1.0"
+description = "Guarded root-support CLI for the Galaxy S22+ toolkit (preflight, backup, verify, Magisk modules)"
+requires-python = ">=3.10"
+dependencies = ["galaxy-s22-toolkit>=0.1.0"]
+
+[project.scripts]
+phone-root = "rooting:main"
+
+[tool.setuptools.packages.find]
+include = ["rooting*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "C4"]
+ignore = ["E501", "B008"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_unused_ignores = true
+warn_redundant_casts = true

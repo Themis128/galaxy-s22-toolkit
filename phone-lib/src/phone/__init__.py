@@ -29,15 +29,24 @@ from .models import (
     LogLevel,
     MemoryInfo,
     NetworkInfo,
+    RootInfo,
+    StorageInfo,
     ThermalInfo,
     ThermalStatus,
     ThermalZone,
-    StorageInfo,
 )
 from .network import NetworkModule
+from .root import RootModule
 from .screen import ScreenModule
 from .storage import StorageModule
-from .termux import TermuxApiCommand, TermuxBattery, TermuxBootManager, TermuxClient, TermuxCpuInfo, TermuxWifiInfo
+from .termux import (
+    TermuxApiCommand,
+    TermuxBattery,
+    TermuxBootManager,
+    TermuxClient,
+    TermuxCpuInfo,
+    TermuxWifiInfo,
+)
 from .thermal import ThermalModule
 
 __version__ = "0.1.0"
@@ -65,6 +74,7 @@ __all__ = [
     "LogEntry",
     "LogLevel",
     "NetworkInfo",
+    "RootInfo",
     "ThermalInfo",
     "ThermalStatus",
     "ThermalZone",
@@ -78,6 +88,7 @@ __all__ = [
     "StorageModule",
     "LogcatModule",
     "NetworkModule",
+    "RootModule",
     "ThermalModule",
     "AppsModule",
     "ScreenModule",
