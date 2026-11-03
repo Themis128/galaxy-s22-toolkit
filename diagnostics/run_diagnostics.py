@@ -92,13 +92,13 @@ class DiagnosticsRunner:
             log_path = self.output_root / log_config.get('path', 'logs/diagnostics.log')
             log_path.parent.mkdir(parents=True, exist_ok=True)
             
+            handlers = [logging.FileHandler(log_path)]
+            if sys.stdout is not None:  # None under pythonw (scheduled run)
+                handlers.append(logging.StreamHandler(sys.stdout))
             logging.basicConfig(
                 level=logging.DEBUG if self.config.advanced.get('verbose', False) else logging.INFO,
                 format='%(asctime)s - %(levelname)s - %(message)s',
-                handlers=[
-                    logging.FileHandler(log_path),
-                    logging.StreamHandler(sys.stdout)
-                ]
+                handlers=handlers,
             )
         else:
             logging.basicConfig(
