@@ -9,6 +9,7 @@ Runs diagnostics, presents issues, and allows user to approve/run repair actions
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -69,9 +70,11 @@ class InteractiveRepairCLI:
 
             # Desktop toast notifications (optional; console fallback below)
             if self.desktop_notifications:
+                # Deep-link must match the dashboard's actual port
+                dash_port = os.getenv("DASHBOARD_PORT", "8081")
                 self.notifier = DesktopNotifier(
                     app_id="Galaxy S22+ Toolkit",
-                    dashboard_url="http://127.0.0.1:8080",
+                    dashboard_url=f"http://127.0.0.1:{dash_port}",
                 )
 
             # Create repair module with interactive confirmation callback and

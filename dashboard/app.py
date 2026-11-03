@@ -796,8 +796,10 @@ def main() -> None:
     """Entry point for `python dashboard/app.py`."""
     import uvicorn
 
+    # 8080 is commonly taken on this machine (e.g. env-manager-frontend);
+    # override with DASHBOARD_PORT when a specific port is required.
     host = os.getenv("DASHBOARD_HOST", "127.0.0.1")
-    port = int(os.getenv("DASHBOARD_PORT", "8080"))
+    port = int(os.getenv("DASHBOARD_PORT", "8081"))
     # Pass the app object directly: dashboard/ has no __init__.py, so the
     # "dashboard.app" import string cannot resolve from every working dir.
     uvicorn.run(app, host=host, port=port, log_level="info")
