@@ -30,6 +30,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+notify = [
+    "windows-toasts>=1.3",
+]
 dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
@@ -37,6 +40,7 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.5.0",
     "types-requests>=2.31.0",
+    "windows-toasts>=1.3; sys_platform == 'win32'",
 ]
 test = [
     "pytest>=7.4.0",
@@ -52,6 +56,8 @@ Issues = "https://github.com/user/galaxy-s22-toolkit/issues"
 [tool.ruff]
 target-version = "py310"
 line-length = 100
+
+[tool.ruff.lint]
 select = [
     "E",   # pycodestyle errors
     "W",   # pycodestyle warnings
@@ -68,7 +74,7 @@ ignore = [
     "B008",  # function calls in default args
 ]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "S106"]  # allow assert and hardcoded passwords in tests
 
 [tool.ruff.format]
