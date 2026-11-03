@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ruff: noqa: T201  # CLI output requires print statements
 """
 Galaxy S22+ Diagnostics Automation Module
 
@@ -530,6 +531,11 @@ class DiagnosticsRunner:
             except Exception:
                 pass
 
+    def _validate_template(self, template: str) -> None:
+        """Reject report-path templates containing '..' segments outright."""
+        if ".." in Path(template).parts:
+            raise ValueError(f"report path template may not contain '..': {template}")
+
     def save_reports(self, report: HealthReport) -> None:
         """Save reports to files."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -538,27 +544,27 @@ class DiagnosticsRunner:
         # JSON report
         if self.config.output.get('json_report', {}).get('enabled', True):
             template = self.config.output['json_report']['path']
+            self._validate_template(template)
             json_file = self._report_file(template, date_str, timestamp)
             json_file.parent.mkdir(parents=True, exist_ok=True)
 
             # Remove read-only attribute on Windows
             self._make_writable(json_file)
 
-            with open(json_file, 'w') as f:
-                json.dump(asdict(report), f, indent=2, default=str)
+            json_file.write_text(json.dumps(asdict(report), indent=2, default=str), encoding='utf-8')
             self.logger.info(f"JSON report saved to {json_file}")
 
         # Summary report
         if self.config.output.get('summary_report', {}).get('enabled', True):
             template = self.config.output['summary_report']['path']
+            self._validate_template(template)
             summary_file = self._report_file(template, date_str, timestamp)
             summary_file.parent.mkdir(parents=True, exist_ok=True)
 
             # Remove read-only attribute on Windows
             self._make_writable(summary_file)
 
-            with open(summary_file, 'w') as f:
-                f.write(self.format_summary(report))
+            summary_file.write_text(self.format_summary(report), encoding='utf-8')
             self.logger.info(f"Summary report saved to {summary_file}")
 
         # Cleanup old reports

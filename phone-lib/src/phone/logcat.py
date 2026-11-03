@@ -758,18 +758,20 @@ class LogcatModule:
         with :class:`PathEscapeError`. Pass ``base_dir`` explicitly to allow
         a different export location; the confinement still applies within it.
         """
-        from .paths import confined_path
+        from .paths import PathEscapeError, confined_path
 
         base = Path(base_dir) if base_dir else Path("logs")
+        # Reject escape attempts outright before confinement (defense in depth;
+        # also makes the validation visible at this call site)
+        if ".." in Path(file_path).parts:
+            raise PathEscapeError(f"log export path may not contain '..': {file_path}")
         # Bare names and relative paths land inside the base; absolute paths
         # and any ".." segments must still resolve inside it.
         target = confined_path(base, Path(base) / file_path)
         target.parent.mkdir(parents=True, exist_ok=True)
 
         logs = self.client.logcat(*filters, format=format, lines=lines)
-        with open(target, "w", encoding="utf-8") as f:
-            for log in logs:
-                f.write(log.raw + "\n")
+        target.write_text("\n".join(log.raw for log in logs) + "\n", encoding="utf-8")
         return len(logs)
 
     def get_log_stats(self, lines: int = 1000) -> dict:

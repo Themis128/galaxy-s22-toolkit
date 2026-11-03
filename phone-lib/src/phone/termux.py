@@ -11,6 +11,7 @@ import os
 import subprocess
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 
@@ -250,14 +251,18 @@ class TermuxClient:
         ~/.termux/boot/. ``script_path`` is confined inside that directory:
         ``..`` segments resolving outside are rejected with PathEscapeError.
         """
-        from .paths import confined_path
+        from .paths import PathEscapeError, confined_path
+
+        # Reject escape attempts outright before confinement (defense in depth;
+        # also makes the validation visible at this call site)
+        if ".." in Path(script_path).parts:
+            raise PathEscapeError(f"boot script path may not contain '..': {script_path}")
 
         boot_dir = os.path.expanduser("~/.termux/boot")
         os.makedirs(boot_dir, exist_ok=True)
 
         full_path = confined_path(boot_dir, os.path.join(boot_dir, script_path))
-        with open(full_path, "w") as f:
-            f.write(content)
+        Path(full_path).write_text(content, encoding="utf-8")
 
         # Make executable
         os.chmod(full_path, 0o755)
