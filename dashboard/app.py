@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""Galaxy S22+ Monitoring Dashboard (staged build - stub)."""
+"""Galaxy S22+ Monitoring Dashboard with Devin control API for Groq bot."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
 import os
+import subprocess
 import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "phone-lib" / "src"))
@@ -20,6 +22,7 @@ from fastapi.responses import HTMLResponse, JSONResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from fastapi.templating import Jinja2Templates  # noqa: E402
 from fastapi.security import APIKeyHeader  # noqa: E402
+from pydantic import BaseModel  # noqa: E402
 
 from phone import create_client  # noqa: E402
 
@@ -32,9 +35,58 @@ MAX_HISTORY = 17_280  # 24 h at 5 s cadence
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
+# API Key authentication for Groq bot via Tailscale
+API_KEY_NAME = "X-API-Key"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+# Load API key and Tailscale allowlist from environment
+GROQ_BOT_API_KEY = os.getenv("GROQ_BOT_API_KEY", "dev-key-change-in-production")
+TAILSCALE_ALLOWLIST = os.getenv("TAILSCALE_ALLOWLIST", "").split(",")  # Comma-separated IPs
+TAILSCALE_ALLOWLIST = [ip.strip() for ip in TAILSCALE_ALLOWLIST if ip.strip()]
+
+# Devin working directory (can be overridden via env)
+DEVIN_WORKDIR = Path(os.getenv("DEVIN_WORKDIR", str(Path.home() / "Devin")))
+
 manager = None
 client = None
 history: list[dict] = []
+
+
+async def verify_api_key(
+    api_key: str = Depends(api_key_header),
+    x_forwarded_for: Optional[str] = Header(None),
+    request: Request = None,
+) -> str:
+    """Verify API key and optionally Tailscale IP allowlist."""
+    if api_key != GROQ_BOT_API_KEY:
+        logger.warning("Invalid API key attempt from %s", request.client.host if request.client else "unknown")
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    
+    # Check Tailscale allowlist if configured
+    if TAILSCALE_ALLOWLIST:
+        client_ip = request.client.host if request.client else ""
+        # Also check X-Forwarded-For for reverse proxy scenarios
+        if x_forwarded_for:
+            client_ip = x_forwarded_for.split(",")[0].strip()
+        
+        if client_ip not in TAILSCALE_ALLOWLIST:
+            logger.warning("IP %s not in Tailscale allowlist", client_ip)
+            raise HTTPException(status_code=403, detail="IP not authorized")
+    
+    return api_key
+
+
+class CommandRequest(BaseModel):
+    """Request model for Devin command execution."""
+    command: str
+    workdir: Optional[str] = None
+    timeout: int = 300
+
+
+class FileRequest(BaseModel):
+    """Request model for file operations."""
+    path: str
+    content: Optional[str] = None
 
 
 class ConnectionManager:
@@ -300,6 +352,240 @@ async def api_diagnostics_run():
     exit_code = await loop.run_in_executor(None, runner.run)
     status = {0: "completed", 1: "issues_found", 2: "critical"}.get(exit_code, "error")
     return JSONResponse({"exit_code": exit_code, "status": status})
+
+
+# ===== Devin Control API (for Groq bot via Tailscale) =====
+
+@app.get("/api/devin/status", dependencies=[Depends(verify_api_key)])
+async def devin_status():
+    """Get Devin status - check if Devin processes are running."""
+    try:
+        # Check for Devin-related processes
+        result = subprocess.run(
+            ["tasklist", "/FI", "IMAGENAME eq devin*", "/FO", "CSV"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        processes = result.stdout.strip().split("\n") if result.stdout else []
+        
+        # Check if Devin workdir exists
+        workdir_exists = DEVIN_WORKDIR.exists()
+        
+        return JSONResponse({
+            "status": "running" if len(processes) > 1 else "stopped",
+            "workdir": str(DEVIN_WORKDIR),
+            "workdir_exists": workdir_exists,
+            "processes": processes[1:] if len(processes) > 1 else [],
+        })
+    except Exception as exc:
+        logger.error("Devin status check failed: %s", exc)
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+@app.post("/api/devin/execute", dependencies=[Depends(verify_api_key)])
+async def devin_execute(request: CommandRequest):
+    """Execute a shell command in the Devin working directory."""
+    workdir = Path(request.workdir) if request.workdir else DEVIN_WORKDIR
+    
+    if not workdir.exists():
+        raise HTTPException(status_code=404, detail=f"Working directory not found: {workdir}")
+    
+    # Security: restrict to workdir and subdirectories
+    try:
+        workdir.resolve().relative_to(DEVIN_WORKDIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Access denied: path outside Devin workdir")
+    
+    try:
+        proc = await asyncio.create_subprocess_shell(
+            request.command,
+            cwd=str(workdir),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(),
+                timeout=request.timeout,
+            )
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            raise HTTPException(status_code=408, detail=f"Command timed out after {request.timeout}s")
+        
+        return JSONResponse({
+            "exit_code": proc.returncode,
+            "stdout": stdout.decode("utf-8", errors="replace"),
+            "stderr": stderr.decode("utf-8", errors="replace"),
+            "command": request.command,
+            "workdir": str(workdir),
+        })
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Command execution failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/devin/files", dependencies=[Depends(verify_api_key)])
+async def devin_list_files(path: str = "."):
+    """List files in Devin working directory."""
+    target_path = (DEVIN_WORKDIR / path).resolve()
+    
+    # Security: restrict to workdir and subdirectories
+    try:
+        target_path.relative_to(DEVIN_WORKDIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Access denied: path outside Devin workdir")
+    
+    if not target_path.exists():
+        raise HTTPException(status_code=404, detail="Path not found")
+    
+    if target_path.is_file():
+        # Return file info
+        stat = target_path.stat()
+        return JSONResponse({
+            "type": "file",
+            "path": str(target_path.relative_to(DEVIN_WORKDIR)),
+            "size": stat.st_size,
+            "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+        })
+    
+    # List directory contents
+    items = []
+    for item in target_path.iterdir():
+        try:
+            stat = item.stat()
+            items.append({
+                "name": item.name,
+                "path": str(item.relative_to(DEVIN_WORKDIR)),
+                "type": "directory" if item.is_dir() else "file",
+                "size": stat.st_size if item.is_file() else None,
+                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            })
+        except Exception:
+            pass  # Skip items we can't stat
+    
+    return JSONResponse({
+        "path": str(target_path.relative_to(DEVIN_WORKDIR)) or ".",
+        "items": sorted(items, key=lambda x: (x["type"] == "file", x["name"].lower())),
+    })
+
+
+@app.get("/api/devin/files/read", dependencies=[Depends(verify_api_key)])
+async def devin_read_file(path: str):
+    """Read a file from Devin working directory."""
+    target_path = (DEVIN_WORKDIR / path).resolve()
+    
+    # Security: restrict to workdir and subdirectories
+    try:
+        target_path.relative_to(DEVIN_WORKDIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Access denied: path outside Devin workdir")
+    
+    if not target_path.exists() or not target_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # Limit file size to 1MB for safety
+    if target_path.stat().st_size > 1_048_576:
+        raise HTTPException(status_code=413, detail="File too large (max 1MB)")
+    
+    try:
+        content = target_path.read_text(encoding="utf-8")
+        return JSONResponse({
+            "path": str(target_path.relative_to(DEVIN_WORKDIR)),
+            "content": content,
+            "size": len(content),
+        })
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=415, detail="File is not valid UTF-8 text")
+    except Exception as exc:
+        logger.error("File read failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/devin/files/write", dependencies=[Depends(verify_api_key)])
+async def devin_write_file(request: FileRequest):
+    """Write a file to Devin working directory."""
+    target_path = (DEVIN_WORKDIR / request.path).resolve()
+    
+    # Security: restrict to workdir and subdirectories
+    try:
+        target_path.relative_to(DEVIN_WORKDIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Access denied: path outside Devin workdir")
+    
+    # Create parent directories if needed
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        if request.content is not None:
+            target_path.write_text(request.content, encoding="utf-8")
+        else:
+            target_path.write_text("", encoding="utf-8")
+        
+        return JSONResponse({
+            "path": str(target_path.relative_to(DEVIN_WORKDIR)),
+            "size": target_path.stat().st_size,
+            "status": "written",
+        })
+    except Exception as exc:
+        logger.error("File write failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.delete("/api/devin/files", dependencies=[Depends(verify_api_key)])
+async def devin_delete_file(path: str):
+    """Delete a file from Devin working directory."""
+    target_path = (DEVIN_WORKDIR / path).resolve()
+    
+    # Security: restrict to workdir and subdirectories
+    try:
+        target_path.relative_to(DEVIN_WORKDIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Access denied: path outside Devin workdir")
+    
+    if not target_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    if target_path.is_dir():
+        raise HTTPException(status_code=400, detail="Cannot delete directories via this endpoint")
+    
+    try:
+        target_path.unlink()
+        return JSONResponse({
+            "path": str(target_path.relative_to(DEVIN_WORKDIR)),
+            "status": "deleted",
+        })
+    except Exception as exc:
+        logger.error("File delete failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/devin/logs", dependencies=[Depends(verify_api_key)])
+async def devin_logs(lines: int = 100):
+    """Get recent Devin logs from the working directory."""
+    log_files = list(DEVIN_WORKDIR.rglob("*.log"))
+    
+    if not log_files:
+        return JSONResponse({"logs": [], "message": "No log files found"})
+    
+    # Get the most recent log file
+    latest_log = max(log_files, key=lambda f: f.stat().st_mtime)
+    
+    try:
+        content = latest_log.read_text(encoding="utf-8", errors="replace")
+        log_lines = content.strip().split("\n")
+        return JSONResponse({
+            "log_file": str(latest_log.relative_to(DEVIN_WORKDIR)),
+            "lines": log_lines[-lines:] if len(log_lines) > lines else log_lines,
+            "total_lines": len(log_lines),
+        })
+    except Exception as exc:
+        logger.error("Log read failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 def main() -> None:
