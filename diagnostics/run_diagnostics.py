@@ -201,7 +201,7 @@ class DiagnosticsRunner:
         if thresholds['min_health_good'] and info.health != BatteryHealth.GOOD:
             issues.append(f"Battery health: {info.health.value} (not GOOD)")
         
-        if info.charge_cycles >= thresholds['charge_cycles_warning']:
+        if info.charge_cycles is not None and info.charge_cycles >= thresholds['charge_cycles_warning']:
             issues.append(f"High charge cycles: {info.charge_cycles} (>{thresholds['charge_cycles_warning']})")
         
         status = "pass" if not issues else "warning"
@@ -255,48 +255,44 @@ class DiagnosticsRunner:
         message = "Storage OK" if not issues else "; ".join(issues)
         
         return CheckResult(name="storage", status=status, message=message, details=details)
-    
+
     def check_thermal(self) -> CheckResult:
         """Check thermal status."""
         thermal = ThermalModule(self.client)
         info = thermal.get_thermal_info()
-        
+
         thresholds = self.config.thresholds['thermal']
-        
+
         details = {
             "zones": [],
-            "cpu_throttling": info.cpu_throttling,
-            "gpu_throttling": info.gpu_throttling,
+            "cpu_throttling": info.cpu_throttled,
+            "gpu_throttling": info.gpu_throttled,
             "overall_status": info.overall_status.value,
         }
-        
+
         issues = []
-        
+
         for zone in info.zones:
             zone_info = {
                 "name": zone.name,
                 "temp_c": zone.temp_c,
-                "type": zone.type.value,
-                "is_critical": zone.is_critical,
+                "type": zone.type,
             }
             details["zones"].append(zone_info)
-            
+
             if zone.temp_c > thresholds['max_zone_temp_c']:
                 issues.append(f"Zone {zone.name}: {zone.temp_c:.1f}°C (>{thresholds['max_zone_temp_c']}°C)")
-            
-            if thresholds['throttle_warning'] and zone.is_critical:
-                issues.append(f"Zone {zone.name} is critical")
-        
-        if info.cpu_throttling:
+
+        if info.cpu_throttled:
             issues.append("CPU throttling active")
-        if info.gpu_throttling:
+        if info.gpu_throttled:
             issues.append("GPU throttling active")
-        
+
         status = "pass" if not issues else "warning"
         message = "Thermal OK" if not issues else "; ".join(issues)
-        
+
         return CheckResult(name="thermal", status=status, message=message, details=details)
-    
+
     def check_network(self) -> CheckResult:
         """Check network connectivity."""
         network = NetworkModule(self.client)
@@ -327,10 +323,10 @@ class DiagnosticsRunner:
         issues = []
         
         if info.wifi_connected:
-            if info.wifi_signal_dbm < thresholds['min_signal_dbm']:
+            if info.wifi_signal_dbm and info.wifi_signal_dbm < thresholds['min_signal_dbm']:
                 issues.append(f"Weak Wi-Fi signal: {info.wifi_signal_dbm} dBm (<{thresholds['min_signal_dbm']})")
         elif info.mobile_connected:
-            if info.mobile_signal_dbm < thresholds['min_signal_dbm']:
+            if info.mobile_signal_dbm and info.mobile_signal_dbm < thresholds['min_signal_dbm']:
                 issues.append(f"Weak mobile signal: {info.mobile_signal_dbm} dBm (<{thresholds['min_signal_dbm']})")
         else:
             issues.append("No network connection")
@@ -516,7 +512,7 @@ class DiagnosticsRunner:
             thermal=thermal_info,
             checks=[asdict(r) for r in self.results],
             overall_status=overall,
-            summary=summary,
+            summary_text=summary,
         )
         
         return report
@@ -580,8 +576,8 @@ class DiagnosticsRunner:
             "",
             f"Battery: {report.battery.level}% - {report.battery.health.value} - {report.battery.temperature_c:.1f}°C",
             f"  Status: {report.battery.status.value}",
-            f"  Voltage: {report.battery.voltage_mv}mV, Current: {report.battery.current_ma}mA",
-            f"  Charge Cycles: {report.battery.charge_cycles}",
+            f"  Voltage: {report.battery.voltage_mv}mV, Current: {report.battery.current_ma or 'N/A'}mA",
+            f"  Charge Cycles: {report.battery.charge_cycles or 'N/A'}",
             "",
             "Storage:",
         ]
@@ -595,14 +591,14 @@ class DiagnosticsRunner:
             f"  Internet: {'Yes' if report.network.internet_reachable else 'No'}",
             f"  Gateway: {report.network.gateway}",
             "",
-            f"Thermal: {report.thermal.overall_status.value}",
-            f"  CPU Throttling: {'Yes' if report.thermal.cpu_throttling else 'No'}",
-            f"  GPU Throttling: {'Yes' if report.thermal.gpu_throttling else 'No'}",
+            f"Thermal: {report.thermal.status.value}",
+            f"  CPU Throttling: {'Yes' if report.thermal.cpu_throttled else 'No'}",
+            f"  GPU Throttling: {'Yes' if report.thermal.gpu_throttled else 'No'}",
         ])
         
         for zone in report.thermal.zones:
             if zone.temp_c > 0:
-                lines.append(f"  {zone.name}: {zone.temp_c:.1f}°C ({zone.type.value})")
+                lines.append(f"  {zone.name}: {zone.temp_c:.1f}°C ({zone.type})")
         
         lines.extend([
             "",

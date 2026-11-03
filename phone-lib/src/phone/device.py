@@ -14,21 +14,62 @@ class DeviceModule:
 
     def __init__(self, client: AdbClient) -> None:
         self.client = client
+        self._props_cache: dict[str, str] | None = None
+        self._api_level: int | None = None
+        self._android_version: str | None = None
 
     def get_all_props(self) -> dict[str, str]:
         """Get all system properties as a dictionary."""
+        if self._props_cache is not None:
+            return self._props_cache
         output = self.client.execute("shell", "getprop")
         props = {}
         for line in output.strip().split("\n"):
             match = re.match(r"^\[(.+?)\]:\s*\[(.*)\]$", line.strip())
             if match:
                 props[match.group(1)] = match.group(2)
+        self._props_cache = props
         return props
 
     def get_prop(self, key: str) -> str | None:
         """Get a single system property."""
         output = self.client.execute("shell", "getprop", key)
         return output.strip() if output.strip() else None
+
+    def get_api_level(self) -> int:
+        """Get Android API level (cached)."""
+        if self._api_level is None:
+            try:
+                self._api_level = int(self.get_prop("ro.build.version.sdk") or "0")
+            except ValueError:
+                self._api_level = 0
+        return self._api_level
+
+    def get_android_version(self) -> str:
+        """Get Android version string (cached)."""
+        if self._android_version is None:
+            self._android_version = self.get_prop("ro.build.version.release") or "Unknown"
+        return self._android_version
+
+    def is_android_13_plus(self) -> bool:
+        """Check if running Android 13+ (API 33+)."""
+        return self.get_api_level() >= 33
+
+    def is_android_14_plus(self) -> bool:
+        """Check if running Android 14+ (API 34+)."""
+        return self.get_api_level() >= 34
+
+    def is_android_15_plus(self) -> bool:
+        """Check if running Android 15+ (API 35+)."""
+        return self.get_api_level() >= 35
+
+    def get_security_patch(self) -> str:
+        """Get security patch date (YYYY-MM-DD)."""
+        return self.get_prop("ro.build.version.security_patch") or "Unknown"
+
+    def get_build_fingerprint(self) -> str:
+        """Get build fingerprint."""
+        return self.get_prop("ro.build.fingerprint") or "Unknown"
 
     def get_device_info(self) -> DeviceInfo:
         """Get comprehensive device information."""
@@ -50,17 +91,23 @@ class DeviceModule:
         except ValueError:
             screen_density = None
 
-        # Parse screen resolution
+        # Parse screen resolution - try multiple sources
         width = None
         height = None
-        display_width = get("ro.vendor.display.width", "")
-        display_height = get("ro.vendor.display.height", "")
-        if display_width and display_height:
-            try:
-                width = int(display_width)
-                height = int(display_height)
-            except ValueError:
-                pass
+        for w_key, h_key in [
+            ("ro.vendor.display.width", "ro.vendor.display.height"),
+            ("ro.product.display.width", "ro.product.display.height"),
+            ("ro.sf.lcd_width", "ro.sf.lcd_height"),
+        ]:
+            display_width = get(w_key, "")
+            display_height = get(h_key, "")
+            if display_width and display_height:
+                try:
+                    width = int(display_width)
+                    height = int(display_height)
+                    break
+                except ValueError:
+                    pass
 
         return DeviceInfo(
             serial=self.client.get_serial(),
@@ -97,25 +144,6 @@ class DeviceModule:
         except Exception:
             return None
 
-    def get_android_version(self) -> str:
-        """Get Android version string."""
-        return self.get_prop("ro.build.version.release") or "Unknown"
-
-    def get_api_level(self) -> int:
-        """Get Android API level."""
-        try:
-            return int(self.get_prop("ro.build.version.sdk") or "0")
-        except ValueError:
-            return 0
-
-    def get_security_patch(self) -> str:
-        """Get security patch date (YYYY-MM-DD)."""
-        return self.get_prop("ro.build.version.security_patch") or "Unknown"
-
-    def get_build_fingerprint(self) -> str:
-        """Get build fingerprint."""
-        return self.get_prop("ro.build.fingerprint") or "Unknown"
-
     def is_rooted(self) -> bool:
         """Check if device appears to be rooted."""
         # Check for su binary
@@ -127,13 +155,13 @@ class DeviceModule:
             pass
 
         # Check for common root indicators
-        try:
-            output = self.client.execute("shell", "ls", "/system/xbin/su", check=False)
-            # Check if the output indicates the file exists (not an error message)
-            if output.strip() and "No such file" not in output and "not found" not in output.lower():
-                return True
-        except Exception:
-            pass
+        for path in ["/system/xbin/su", "/system/bin/su", "/su/bin/su", "/magisk/bin/su"]:
+            try:
+                output = self.client.execute("shell", "ls", path, check=False)
+                if output.strip() and "No such file" not in output and "not found" not in output.lower():
+                    return True
+            except Exception:
+                pass
 
         return False
 
@@ -202,17 +230,19 @@ class DeviceModule:
         return None
 
     def get_wifi_ip(self) -> str | None:
-        """Get device Wi-Fi IP address."""
-        try:
-            output = self.client.execute("shell", "ip", "-f", "inet", "addr", "show", "wlan0")
-            for line in output.split("\n"):
-                line = line.strip()
-                if line.startswith("inet "):
-                    # Format: "inet 192.168.1.100/24 brd 192.168.1.255 scope global wlan0"
-                    ip = line.split()[1].split("/")[0]
-                    return ip
-        except Exception:
-            pass
+        """Get device Wi-Fi IP address - tries multiple interface names."""
+        # Try common Wi-Fi interface names
+        for iface in ["wlan0", "wlan1", "p2p0", "wifi0"]:
+            try:
+                output = self.client.execute("shell", "ip", "-f", "inet", "addr", "show", iface)
+                for line in output.split("\n"):
+                    line = line.strip()
+                    if line.startswith("inet "):
+                        # Format: "inet 192.168.1.100/24 brd 192.168.1.255 scope global wlan0"
+                        ip = line.split()[1].split("/")[0]
+                        return ip
+            except Exception:
+                continue
         return None
 
     def enable_wireless_adb(self, port: int = 5555) -> str:

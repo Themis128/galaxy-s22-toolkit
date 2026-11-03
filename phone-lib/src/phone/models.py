@@ -115,6 +115,18 @@ class BatteryInfo:
         """Charge cycles (alias for diagnostics compatibility)."""
         return self.charge_cycles
 
+    @property
+    def current_ma(self) -> int | None:
+        """Current in milliamps (alias for diagnostics compatibility). Not directly available from dumpsys battery."""
+        # Android doesn't expose current directly via dumpsys battery
+        # Could be estimated from charge/discharge rate but not reliably
+        return None
+
+    @property
+    def capacity_mah(self) -> int | None:
+        """Current capacity in mAh (alias for diagnostics compatibility)."""
+        return self.current_capacity_mah
+
 
 @dataclass(slots=True)
 class StorageInfo:
@@ -253,6 +265,26 @@ class NetworkInfo:
     gateway: str | None = None
     internet_reachable: bool = False
 
+    @property
+    def wifi_frequency_mhz(self) -> int | None:
+        """Wi-Fi frequency in MHz (alias for diagnostics compatibility). Not directly available."""
+        return None
+
+    @property
+    def mobile_operator(self) -> str | None:
+        """Mobile network operator (alias for diagnostics compatibility)."""
+        return self.mobile_type
+
+    @property
+    def mobile_signal_dbm(self) -> int | None:
+        """Mobile signal strength in dBm (alias for diagnostics compatibility). Not directly available."""
+        return None
+
+    @property
+    def mobile_network_type(self) -> str | None:
+        """Mobile network type (alias for diagnostics compatibility)."""
+        return self.mobile_type
+
 
 @dataclass(slots=True)
 class ThermalZone:
@@ -273,6 +305,11 @@ class ThermalInfo:
     cpu_throttled: bool = False
     gpu_throttled: bool = False
     status: ThermalStatus = ThermalStatus.NORMAL
+
+    @property
+    def overall_status(self) -> ThermalStatus:
+        """Overall thermal status (alias for diagnostics compatibility)."""
+        return self.status
 
 
 @dataclass(slots=True)
@@ -383,6 +420,9 @@ class HealthReport:
     recent_anrs: list[LogEntry] = field(default_factory=list)
     issues: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    checks: list[dict] = field(default_factory=list)
+    overall_status: str = "healthy"
+    summary_text: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -395,6 +435,9 @@ class HealthReport:
 
     @property
     def summary(self) -> str:
+        """Summary text (alias for diagnostics compatibility)."""
+        if self.summary_text:
+            return self.summary_text
         parts = []
         if self.battery:
             parts.append(f"Battery: {self.battery.level}% ({self.battery.health.value})")

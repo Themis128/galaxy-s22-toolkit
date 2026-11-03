@@ -31,7 +31,7 @@ class ThermalModule:
         """Get all thermal zones and their temperatures."""
         zones = []
         try:
-            # Find thermal zone directories
+            # Find thermal zone directories - standard location
             output = self.client.execute("shell", "ls", "/sys/class/thermal/")
             zone_dirs = [d for d in output.strip().split("\n") if d.startswith("thermal_zone")]
 
@@ -81,6 +81,21 @@ class ThermalModule:
                     continue
             elif section == "hal" and stripped and not stripped.startswith("Temperature{"):
                 break
+
+        # Also try newer Android format (Android 14+)
+        if not zones:
+            for line in output.split("\n"):
+                stripped = line.strip()
+                # New format: "Zone: zone_name, temp=xx.x°C"
+                if "temp=" in stripped and "Zone:" in stripped:
+                    try:
+                        name = stripped.split("Zone:")[1].split(",")[0].strip()
+                        temp_str = stripped.split("temp=")[1].split("°")[0].strip()
+                        temp_c = float(temp_str)
+                        zones.append(ThermalZone(name=name, temp_c=temp_c, type="hal"))
+                    except (IndexError, ValueError):
+                        continue
+
         return zones
 
     def _read_thermal_zone(self, zone_path: str) -> ThermalZone | None:
