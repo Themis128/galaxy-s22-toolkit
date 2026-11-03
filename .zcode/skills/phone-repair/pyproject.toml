@@ -1,0 +1,31 @@
+[project]
+name = "phone-repair"
+version = "1.0.0"
+description = "Approved Android repair actions: storage cleanup, app management, network reset, log cleanup"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "galaxy-s22-toolkit>=0.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-mock>=3.12.0",
+    "ruff>=0.1.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "C4"]
+ignore = ["E501", "B008"]
+
+[project.scripts]
+phone-repair = "phone_repair.__init__:main"

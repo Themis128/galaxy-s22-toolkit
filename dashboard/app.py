@@ -125,7 +125,10 @@ def _collect_once() -> dict:
     """One blocking collection pass (runs in a worker thread)."""
     global client
     if client is None:
-        client = create_client()
+        # PHONE_ADB_SERIAL overrides config.yaml's USB serial - needed when
+        # the dashboard runs in a container that reaches the device over
+        # wireless ADB (e.g. the tailnet address of the phone)
+        client = create_client(os.getenv("PHONE_ADB_SERIAL") or None)
         if not client.is_connected:
             raise ConnectionError("No ADB device connected")
 
@@ -247,6 +250,10 @@ async def collector_loop() -> None:
             raise
         except Exception as exc:  # noqa: BLE001 - collector must never die
             logger.error("Collector error: %s", exc)
+            # Drop the cached client so the next tick reconnects (e.g. the
+            # device appeared after startup, as with `adb connect` later on)
+            global client
+            client = None
         await asyncio.sleep(COLLECT_INTERVAL_S)
 
 

@@ -14,6 +14,20 @@ DASHBOARD_PORT=9000 python dashboard/app.py
 Port 8080 is commonly occupied on this machine (env-manager-frontend), so
 the default is 8081.
 
+## Run in Docker
+
+The container reaches the phone over wireless ADB through the tailnet
+(enable once over USB: `adb tcpip 5555`, then the phone answers at its
+Tailscale IP, port 5555):
+
+```bash
+docker compose up -d --build
+```
+
+The compose file mounts the host's ADB keys read-only so the phone does
+not need to approve a new key, sets `DASHBOARD_HOST=0.0.0.0` (required
+for published ports), and connects to `PHONE_ADB_HOST:5555` on start.
+
 ## Monitoring
 
 - `GET /api/health` — current snapshot (device, battery, storage, network, thermal)

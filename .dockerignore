@@ -1,0 +1,12 @@
+# Build-context exclusions: caches, runtime output, VCS
+**/.ruff_cache
+**/.pytest_cache
+**/__pycache__
+**/*.egg-info
+.git
+.glm-hammer/
+/logs/
+/reports/
+/diagnostics/logs/
+/diagnostics/reports/
+/micro1-report.md

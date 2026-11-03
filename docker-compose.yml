@@ -1,0 +1,21 @@
+services:
+  dashboard:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      DASHBOARD_PORT: "8081"
+      DASHBOARD_HOST: "0.0.0.0"   # container must bind all interfaces for published ports
+      GROQ_BOT_API_KEY: ${GROQ_BOT_API_KEY:-dev-key-change-in-production}
+      # Phone's tailnet IP (galaxy-s22); wireless ADB must be on (adb tcpip 5555)
+      PHONE_ADB_HOST: ${PHONE_ADB_HOST:-100.84.31.85}
+    volumes:
+      # Reuse the host's already-authorized ADB keys so the phone does not
+      # need to approve a new key for the container
+      - ${USERPROFILE}/.android/adbkey:/root/.android/adbkey:ro
+      - ${USERPROFILE}/.android/adbkey.pub:/root/.android/adbkey.pub:ro
+    command: >
+      sh -c "adb connect $$PHONE_ADB_HOST:5555 &&
+             python dashboard/app.py"
