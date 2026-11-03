@@ -109,11 +109,14 @@ class DiagnosticsRunner:
         self.logger = logging.getLogger(__name__)
     
     def _create_client(self) -> None:
-        """Create ADB client."""
-        serial = self.config.device.get('serial')
-        adb_path = self.config.device.get('adb_path') or None
-        self.client = create_client(serial=serial, adb_path=adb_path)
-        self.logger.info(f"Connected to device: {serial}")
+        """Create ADB client with wireless auto-reconnect from config."""
+        device_cfg = self.config.device
+        adb_path = device_cfg.get('adb_path') or None
+        wireless = device_cfg.get('wireless_adb') or None
+        if wireless:
+            wireless = {**wireless, "preferred_serial": device_cfg.get('serial')}
+        self.client = create_client(wireless=wireless, adb_path=adb_path)
+        self.logger.info(f"Connected to device: {self.client.serial or 'auto-detect'}")
     
     def _run_check(self, name: str, check_func, *args, **kwargs) -> CheckResult:
         """Run a single check with timing and error handling."""

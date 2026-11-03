@@ -121,6 +121,21 @@ client = None
 history: list[dict] = []
 
 
+def _device_wireless_settings() -> dict | None:
+    """device.wireless_adb from diagnostics/config.yaml (host-side fallback)."""
+    try:
+        import yaml
+
+        with open(PROJECT_ROOT / "diagnostics" / "config.yaml", encoding="utf-8") as f:
+            device_cfg = (yaml.safe_load(f) or {}).get("device", {})
+        wireless = device_cfg.get("wireless_adb") or None
+        if wireless:
+            wireless = {**wireless, "preferred_serial": device_cfg.get("serial")}
+        return wireless
+    except Exception:
+        return None
+
+
 def _collect_once() -> dict:
     """One blocking collection pass (runs in a worker thread)."""
     global client
@@ -128,7 +143,10 @@ def _collect_once() -> dict:
         # PHONE_ADB_SERIAL overrides config.yaml's USB serial - needed when
         # the dashboard runs in a container that reaches the device over
         # wireless ADB (e.g. the tailnet address of the phone)
-        client = create_client(os.getenv("PHONE_ADB_SERIAL") or None)
+        client = create_client(
+            os.getenv("PHONE_ADB_SERIAL") or None,
+            wireless=_device_wireless_settings(),
+        )
         if not client.is_connected:
             raise ConnectionError("No ADB device connected")
 

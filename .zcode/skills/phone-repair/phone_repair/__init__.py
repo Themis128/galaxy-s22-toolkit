@@ -56,8 +56,22 @@ def _result_json(result) -> dict:
     }
 
 
+def _wireless_settings() -> dict | None:
+    try:
+        import yaml
+
+        with open(PROJECT_ROOT / "diagnostics" / "config.yaml", encoding="utf-8") as f:
+            device_cfg = (yaml.safe_load(f) or {}).get("device", {})
+        wireless = device_cfg.get("wireless_adb") or None
+        if wireless:
+            wireless = {**wireless, "preferred_serial": device_cfg.get("serial")}
+        return wireless
+    except Exception:
+        return None
+
+
 def _client_or_none():
-    client = create_client()
+    client = create_client(wireless=_wireless_settings())
     if not client.is_connected:
         print("No ADB device connected", file=sys.stderr)
         return None

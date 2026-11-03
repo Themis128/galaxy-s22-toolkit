@@ -8,6 +8,8 @@ device:
     enabled: true
     port: 5555
     auto_connect: true  # Auto-reconnect on startup
+    host: "100.84.31.85"  # Phone's Tailscale IP (galaxy-s22)
+    preferred_serial: "RFCTA0AEKZP"  # USB serial wins when also attached
 
 # Health check thresholds
 thresholds:

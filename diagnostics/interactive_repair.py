@@ -60,7 +60,11 @@ class InteractiveRepairCLI:
     async def initialize(self) -> bool:
         """Initialize ADB client and repair module."""
         try:
-            self.client = create_client()
+            device_cfg = (self.config.get("device") or {})
+            wireless = device_cfg.get("wireless_adb") or None
+            if wireless:
+                wireless = {**wireless, "preferred_serial": device_cfg.get("serial")}
+            self.client = create_client(wireless=wireless)
             if not self.client.is_connected:
                 print("❌ No ADB device connected. Please connect your device and enable USB debugging.")
                 return False

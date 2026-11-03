@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import shlex
 import subprocess
@@ -23,6 +24,9 @@ from .models import LogEntry
 
 if TYPE_CHECKING:
     from .logcat import LogcatModule
+
+
+logger = logging.getLogger(__name__)
 
 
 class AdbClient:
@@ -620,6 +624,56 @@ class AdbClient:
         pass
 
 
-def create_client(serial: str | None = None, **kwargs: Any) -> AdbClient:
-    """Factory function to create AdbClient with defaults for Galaxy S22+."""
-    return AdbClient(serial=serial or "RFCTA0AEKZP", **kwargs)
+def create_client(
+    serial: str | None = None,
+    wireless: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> AdbClient:
+    """Factory: create AdbClient, optionally auto-connecting wireless ADB.
+
+    Serial resolution order:
+      1. explicit ``serial`` argument
+      2. ``PHONE_ADB_SERIAL`` environment variable
+      3. auto-detect - when ``wireless`` settings enable ``auto_connect``
+         and no device is attached, ``adb connect <host>:<port>`` runs
+         first, recovering a phone whose TCP mode reset (reboot) or whose
+         cable was unplugged.
+
+    ``wireless`` mirrors config.yaml's ``device.wireless_adb``::
+
+        {"enabled": true, "host": "100.84.31.85", "port": 5555,
+         "auto_connect": true, "preferred_serial": "RFCTA0AEKZP"}
+
+    ``preferred_serial`` wins when present among attached devices, so a
+    USB-plugged phone keeps working unchanged even after the wireless
+    transport also connects.
+    """
+    if serial is None:
+        serial = os.getenv("PHONE_ADB_SERIAL") or None
+
+    if serial is None and wireless and wireless.get("enabled", True) and wireless.get("auto_connect"):
+        probe = AdbClient(serial=None, **kwargs)
+        try:
+            authorized = [
+                d["serial"] for d in probe.list_devices() if d.get("state") == "device"
+            ]
+            if not authorized:
+                host = wireless.get("host")
+                if host:
+                    probe.execute(
+                        "connect", f"{host}:{int(wireless.get('port', 5555))}", check=False
+                    )
+                    authorized = [
+                        d["serial"]
+                        for d in probe.list_devices()
+                        if d.get("state") == "device"
+                    ]
+            if authorized:
+                preferred = wireless.get("preferred_serial")
+                serial = (
+                    preferred if preferred in authorized else authorized[0]
+                )
+        except Exception:
+            logger.warning("Wireless ADB auto-connect failed", exc_info=True)
+
+    return AdbClient(serial=serial, **kwargs)
