@@ -181,6 +181,9 @@ class AdbClient:
                     text=True,
                     timeout=timeout or self.timeout,
                     input=input_data,
+                    # Never inherit our stdin: adb shell forwards it to the
+                    # device and would drain the parent's pipe.
+                    stdin=subprocess.DEVNULL if not input_data else None,
                     encoding="utf-8",
                     errors="replace",
                     env=env,
@@ -233,7 +236,10 @@ class AdbClient:
                     *cmd,
                     stdout=asyncio.subprocess.PIPE if capture else None,
                     stderr=asyncio.subprocess.PIPE if capture else None,
-                    stdin=asyncio.subprocess.PIPE if input_data else None,
+                    # Never inherit our stdin: adb shell forwards its stdin to
+                    # the device and would drain the parent's pipe (e.g. an
+                    # interactive CLI's menu input).
+                    stdin=asyncio.subprocess.PIPE if input_data else asyncio.subprocess.DEVNULL,
                     env=env,
                 )
                 try:

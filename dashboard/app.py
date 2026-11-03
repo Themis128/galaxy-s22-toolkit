@@ -354,6 +354,210 @@ async def api_diagnostics_run():
     return JSONResponse({"exit_code": exit_code, "status": status})
 
 
+# ===== Repair API (for auto-repair with user approval) =====
+
+class RepairActionRequest(BaseModel):
+    """Request model for repair action execution."""
+    action_name: str
+    kwargs: dict = {}
+    # Non-auto-approve actions require explicit confirmation from the UI
+    confirm: bool = False
+
+
+class RepairMultipleRequest(BaseModel):
+    """Request model for multiple repair actions."""
+    action_names: list[str]
+    kwargs: dict = {}
+    confirm: bool = False
+
+
+class RepairApprovalRequest(BaseModel):
+    """Request model for repair approval."""
+    action_name: str
+    approved: bool
+
+
+@app.get("/api/repair/actions")
+async def api_repair_actions():
+    """Get available repair actions, optionally filtered by diagnostics results."""
+    from phone.repair import RepairModule
+
+    if client is None:
+        return JSONResponse({"error": "Device not connected"}, status_code=503)
+
+    repair_module = RepairModule(client)
+
+    # Use the most recent saved diagnostics report instead of re-running
+    # diagnostics on every request (a full run takes ~13s)
+    diagnostics_results = _latest_diagnostics_results()
+
+    actions = await repair_module.get_pending_actions(diagnostics_results)
+
+    return JSONResponse({
+        "actions": [
+            {
+                "name": a.name,
+                "description": a.description,
+                "category": a.category,
+                "risk_level": a.risk_level,
+                "requires_root": a.requires_root,
+                "estimated_duration_s": a.estimated_duration_s,
+                "auto_approve": a.auto_approve,
+            }
+            for a in actions
+        ],
+        "total": len(actions),
+    })
+
+
+def _latest_diagnostics_results() -> list[dict] | None:
+    """Load check results from the newest saved health report (or None)."""
+    reports_dir = PROJECT_ROOT / "diagnostics" / "reports"
+    try:
+        report_files = sorted(reports_dir.glob("health_report_*.json"))
+        if not report_files:
+            return None
+        import json
+
+        with open(report_files[-1], encoding="utf-8") as f:
+            report = json.load(f)
+        return report.get("check_results") or report.get("results") or None
+    except Exception as exc:
+        logger.warning("Could not load latest diagnostics report: %s", exc)
+        return None
+
+
+@app.post("/api/repair/execute")
+async def api_repair_execute(request: RepairActionRequest):
+    """Execute a single repair action."""
+    from phone.repair import RepairModule
+
+    if client is None:
+        return JSONResponse({"error": "Device not connected"}, status_code=503)
+
+    repair_module = RepairModule(
+        client, history_path=_repair_history_path()
+    )
+
+    # Server-side approval gate: non-auto-approve actions need confirm=True
+    action = next(
+        (a for a in RepairModule.AVAILABLE_ACTIONS if a.name == request.action_name),
+        None,
+    )
+    if action is None:
+        return JSONResponse({"error": f"Unknown action: {request.action_name}"}, status_code=400)
+    if not action.auto_approve and not request.confirm:
+        return JSONResponse(
+            {
+                "status": "confirmation_required",
+                "action_name": action.name,
+                "description": action.description,
+                "risk_level": action.risk_level,
+                "message": "This action requires explicit confirmation (set confirm=true).",
+            },
+            status_code=202,
+        )
+
+    result = await repair_module.execute_action(request.action_name, **request.kwargs)
+    _notify_repair_toast(result)
+    return _repair_result_json(result)
+
+
+def _repair_result_json(result) -> dict:
+    """Serialize a RepairResult for API responses."""
+    return {
+        "action_name": result.action.name,
+        "success": result.success,
+        "message": result.message,
+        "details": result.details,
+        "duration_ms": result.duration_ms,
+        "timestamp": result.timestamp.isoformat(),
+        "requires_reboot": result.requires_reboot,
+    }
+
+
+def _repair_history_path() -> str | None:
+    """Repair history file path from diagnostics/config.yaml (repair section)."""
+    try:
+        import yaml
+
+        with open(PROJECT_ROOT / "diagnostics" / "config.yaml", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+        rel = (cfg.get("repair") or {}).get("history_file")
+        return str(PROJECT_ROOT / rel) if rel else None
+    except Exception:
+        return None
+
+
+def _notify_repair_toast(result) -> None:
+    """Fire a desktop toast for a completed repair (best-effort, non-blocking)."""
+    try:
+        from phone.notify import DesktopNotifier
+
+        notifier = DesktopNotifier(app_id="Galaxy S22+ Toolkit")
+        emoji = "succeeded" if result.success else "failed"
+        notifier.notify(
+            f"Repair {emoji}: {result.action.name}",
+            result.message,
+            long=not result.success,
+        )
+    except Exception as exc:
+        logger.debug("Repair toast not shown: %s", exc)
+
+
+@app.post("/api/repair/execute-multiple")
+async def api_repair_execute_multiple(request: RepairMultipleRequest):
+    """Execute multiple repair actions sequentially."""
+    from phone.repair import RepairModule
+
+    if client is None:
+        return JSONResponse({"error": "Device not connected"}, status_code=503)
+
+    repair_module = RepairModule(client, history_path=_repair_history_path())
+
+    # Enforce confirmation for any requested non-auto-approve action
+    gated = [
+        a for a in RepairModule.AVAILABLE_ACTIONS
+        if a.name in request.action_names and not a.auto_approve
+    ]
+    if gated and not request.confirm:
+        return JSONResponse(
+            {
+                "status": "confirmation_required",
+                "actions": [
+                    {"action_name": a.name, "risk_level": a.risk_level} for a in gated
+                ],
+                "message": "Some actions require explicit confirmation (set confirm=true).",
+            },
+            status_code=202,
+        )
+
+    results = await repair_module.execute_multiple(request.action_names, **request.kwargs)
+    for r in results:
+        _notify_repair_toast(r)
+    return JSONResponse({
+        "results": [_repair_result_json(r) for r in results],
+        "total": len(results),
+        "successful": sum(1 for r in results if r.success),
+    })
+
+
+@app.get("/api/repair/history")
+async def api_repair_history():
+    """Get repair action history (persisted JSONL)."""
+    from phone.repair import RepairModule
+
+    if client is None:
+        return JSONResponse({"error": "Device not connected"}, status_code=503)
+
+    repair_module = RepairModule(client, history_path=_repair_history_path())
+
+    return JSONResponse({
+        "history": [_repair_result_json(r) for r in repair_module.history],
+        "total": len(repair_module.history),
+    })
+
+
 # ===== Devin Control API (for Groq bot via Tailscale) =====
 
 @app.get("/api/devin/status", dependencies=[Depends(verify_api_key)])
@@ -594,7 +798,9 @@ def main() -> None:
 
     host = os.getenv("DASHBOARD_HOST", "127.0.0.1")
     port = int(os.getenv("DASHBOARD_PORT", "8080"))
-    uvicorn.run("dashboard.app:app", host=host, port=port, log_level="info")
+    # Pass the app object directly: dashboard/ has no __init__.py, so the
+    # "dashboard.app" import string cannot resolve from every working dir.
+    uvicorn.run(app, host=host, port=port, log_level="info")
 
 
 if __name__ == "__main__":

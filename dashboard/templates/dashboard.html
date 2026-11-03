@@ -188,9 +188,24 @@
             flex-wrap: wrap;
         }
         
+        /* Mobile / Tailscale phone access */
         @media (max-width: 768px) {
-            .container { padding: 1rem; }
-            .grid { grid-template-columns: 1fr; }
+            .container { padding: 0.75rem; }
+            .grid { grid-template-columns: 1fr; gap: 0.75rem; }
+            .header h1 { font-size: 1.25rem; }
+            .header { padding: 0.75rem 1rem; }
+            .controls { gap: 0.5rem; }
+            .btn {
+                flex: 1 1 auto;
+                min-height: 44px; /* comfortable touch target */
+                font-size: 0.95rem;
+                padding: 0.6rem 1rem;
+            }
+            .card { border-radius: 10px; }
+            .card-body { padding: 0.75rem; }
+            .metric-row { font-size: 0.9rem; padding: 0.45rem 0; }
+            table { font-size: 0.8rem; display: block; overflow-x: auto; }
+            .btn-danger { width: 100%; }
         }
     </style>
 </head>
@@ -388,6 +403,24 @@
                         <span class="metric-label">Security Patch</span>
                         <span class="metric-value" id="device-patch">--</span>
                     </div>
+                </div>
+            </div>
+
+            <!-- Repair Card -->
+            <div class="card">
+                <div class="card-header">🔧 Auto-Repair</div>
+                <div class="card-body" id="repair-card">
+                    <div class="metric-row">
+                        <span class="metric-label">Available Actions</span>
+                        <span class="metric-value" id="repair-count">--</span>
+                    </div>
+                    <div id="repair-actions" style="margin-top: 0.5rem; display: none;"></div>
+                    <div class="controls" style="margin-top: 1rem;" id="repair-controls" style="display: none;">
+                        <button class="btn" id="repair-refresh-btn" onclick="loadRepairActions()">🔄 Refresh Actions</button>
+                        <button class="btn" id="repair-run-btn" onclick="runAllRepairs()" style="background: #e74c3c;">⚠️ Run All Repairs</button>
+                    </div>
+                    <div id="repair-progress" style="margin-top: 1rem; display: none;"></div>
+                    <div id="repair-history" style="margin-top: 1rem; display: none;"></div>
                 </div>
             </div>
         </div>
@@ -817,6 +850,196 @@
             } finally {
                 btn.disabled = false;
                 btn.textContent = '🏥 Run Diagnostics';
+            }
+        }
+        
+        // Repair functions
+        async function loadRepairActions() {
+            const container = document.getElementById('repair-actions');
+            const controls = document.getElementById('repair-controls');
+            const countEl = document.getElementById('repair-count');
+            
+            container.style.display = 'block';
+            controls.style.display = 'flex';
+            container.innerHTML = '<div class="metric-row"><span class="metric-label">Loading actions...</span></div>';
+            
+            try {
+                const response = await fetch('/api/repair/actions');
+                const data = await response.json();
+                
+                countEl.textContent = data.total;
+                
+                if (data.actions && data.actions.length > 0) {
+                    container.innerHTML = '';
+                    data.actions.forEach(action => {
+                        const row = document.createElement('div');
+                        row.className = 'metric-row';
+                        row.style.fontSize = '0.85rem';
+                        row.style.marginBottom = '0.5rem';
+                        row.style.padding = '0.5rem';
+                        row.style.background = '#fafafa';
+                        row.style.borderRadius = '8px';
+                        row.innerHTML = `
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600; margin-bottom: 0.25rem;">
+                                    ${action.name}
+                                    <span class="metric-value" style="font-size: 0.75rem; margin-left: 0.5rem; padding: 0.1rem 0.5rem; border-radius: 4px; background: ${getRiskColor(action.risk_level)}; color: white;">${action.risk_level.toUpperCase()}</span>
+                                    ${action.requires_root ? '<span class="metric-value" style="font-size: 0.75rem; margin-left: 0.5rem; padding: 0.1rem 0.5rem; border-radius: 4px; background: #9b59b6; color: white;">ROOT</span>' : ''}
+                                    ${action.auto_approve ? '<span class="metric-value" style="font-size: 0.75rem; margin-left: 0.5rem; padding: 0.1rem 0.5rem; border-radius: 4px; background: #2ecc71; color: white;">AUTO</span>' : ''}
+                                </div>
+                                <div class="metric-label" style="font-size: 0.8rem;">${action.description}</div>
+                                <div class="metric-label" style="font-size: 0.75rem;">Category: ${action.category} | Est: ${action.estimated_duration_s}s</div>
+                            </div>
+                            <button class="btn" onclick="runSingleRepair('${action.name}', ${action.auto_approve})" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; min-height: 40px;">${action.auto_approve ? '✅ Auto' : '⚠️ Approve & Run'}</button>
+                        `;
+                        container.appendChild(row);
+                    });
+                } else {
+                    container.innerHTML = '<div class="metric-row"><span class="metric-label">No repair actions recommended at this time ✅</span></div>';
+                }
+                
+                // Load history
+                loadRepairHistory();
+            } catch (error) {
+                console.error('Failed to load repair actions:', error);
+                container.innerHTML = '<div class="metric-row"><span class="metric-value critical">Failed to load actions</span></div>';
+            }
+        }
+        
+        function getRiskColor(risk) {
+            switch (risk) {
+                case 'low': return '#2ecc71';
+                case 'medium': return '#f39c12';
+                case 'high': return '#e74c3c';
+                default: return '#95a5a6';
+            }
+        }
+        
+        async function runSingleRepair(actionName, autoApprove) {
+            const btn = event.target;
+
+            // UI confirmation for non-auto-approve actions (server enforces too)
+            if (!autoApprove) {
+                const msg = `Approve repair "${actionName}"?\n\nThis changes device state.`;
+                if (!confirm(msg)) {
+                    return;
+                }
+            }
+
+            btn.disabled = true;
+            btn.textContent = '⏳ Running...';
+
+            try {
+                const response = await fetch('/api/repair/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action_name: actionName, kwargs: {}, confirm: true })
+                });
+
+                if (response.status === 202) {
+                    btn.disabled = false;
+                    btn.textContent = '⚠️ Approve & Run';
+                    alert('Server requires confirmation for this action. Reload the page and approve again.');
+                    return;
+                }
+
+                const result = await response.json();
+
+                if (result.success) {
+                    btn.textContent = '✅ Done';
+                    btn.style.background = '#2ecc71';
+                } else {
+                    btn.textContent = '❌ Failed';
+                    btn.style.background = '#e74c3c';
+                }
+                alert(`${actionName}: ${result.message}`);
+                loadRepairActions(); // Refresh
+            } catch (error) {
+                console.error('Repair failed:', error);
+                btn.textContent = '❌ Error';
+                btn.style.background = '#e74c3c';
+                alert(`Failed to run ${actionName}`);
+            }
+        }
+        
+        async function runAllRepairs() {
+            if (!confirm('Run ALL recommended repair actions? This may require root access and could reboot the device.')) {
+                return;
+            }
+            
+            const btn = document.getElementById('repair-run-btn');
+            const progress = document.getElementById('repair-progress');
+            btn.disabled = true;
+            btn.textContent = '⏳ Running all repairs...';
+            progress.style.display = 'block';
+            progress.innerHTML = '<div class="metric-row"><span class="metric-label">Starting repairs...</span></div>';
+            
+            try {
+                // First get the list of actions
+                const actionsResponse = await fetch('/api/repair/actions');
+                const actionsData = await actionsResponse.json();
+                
+                if (!actionsData.actions || actionsData.actions.length === 0) {
+                    progress.innerHTML = '<div class="metric-row"><span class="metric-label good">No actions to run ✅</span></div>';
+                    return;
+                }
+                
+                const actionNames = actionsData.actions.map(a => a.name);
+                
+                progress.innerHTML = `<div class="metric-row"><span class="metric-label">Running ${actionNames.length} actions...</span></div>`;
+                
+                const response = await fetch('/api/repair/execute-multiple', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action_names: actionNames, kwargs: {}, confirm: true })
+                });
+                const result = await response.json();
+                
+                let html = `<div class="metric-row"><span class="metric-label"><strong>Completed: ${result.successful}/${result.total} successful</strong></span></div>`;
+                result.results.forEach(r => {
+                    html += `<div class="metric-row" style="font-size: 0.85rem; padding: 0.25rem;">
+                        <span class="metric-label">${r.action_name}</span>
+                        <span class="metric-value ${r.success ? 'good' : 'critical'}">${r.success ? '✅' : '❌'} ${r.message}</span>
+                    </div>`;
+                });
+                progress.innerHTML = html;
+                
+                if (result.results.some(r => r.requires_reboot)) {
+                    progress.innerHTML += '<div class="metric-row"><span class="metric-value warning">⚠️ Some actions require a device reboot</span></div>';
+                }
+                
+                loadRepairActions(); // Refresh
+            } catch (error) {
+                console.error('Bulk repair failed:', error);
+                progress.innerHTML = '<div class="metric-row"><span class="metric-value critical">Failed to run repairs</span></div>';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '⚠️ Run All Repairs';
+            }
+        }
+        
+        async function loadRepairHistory() {
+            const container = document.getElementById('repair-history');
+            
+            try {
+                const response = await fetch('/api/repair/history');
+                const data = await response.json();
+                
+                if (data.history && data.history.length > 0) {
+                    container.style.display = 'block';
+                    let html = '<div class="metric-row"><span class="metric-label"><strong>Repair History</strong></span></div>';
+                    data.history.slice(-10).reverse().forEach(r => {
+                        html += `<div class="metric-row" style="font-size: 0.8rem; padding: 0.25rem; border-top: 1px solid #f0f0f0;">
+                            <span class="metric-label">${r.action_name}</span>
+                            <span class="metric-value ${r.success ? 'good' : 'critical'}">${r.success ? '✅' : '❌'} ${new Date(r.timestamp).toLocaleTimeString()}</span>
+                        </div>`;
+                    });
+                    container.innerHTML = html;
+                } else {
+                    container.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Failed to load repair history:', error);
             }
         }
         

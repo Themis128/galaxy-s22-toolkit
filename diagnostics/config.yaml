@@ -112,6 +112,20 @@ schedule:
   # Minimum interval between runs (minutes)
   min_interval_minutes: 60
 
+# Repair settings (auto-repair after approval)
+repair:
+  # Risk levels approved without prompting. Actions also carry a per-action
+  # auto_approve flag; approval is granted when EITHER matches.
+  auto_approve_risk_levels: [low]
+  # How long a desktop toast approval prompt waits before denying (seconds)
+  approval_timeout_s: 120
+  # Show desktop toast notifications for repair events (approval prompts,
+  # batch summaries). Falls back to console prompt when unavailable.
+  desktop_notifications: true
+  # Persistent repair history (JSONL, one result per line)
+  history_file: "logs/repair_history.jsonl"
+  history_max_entries: 500
+
 # Output settings
 output:
   # Save JSON report

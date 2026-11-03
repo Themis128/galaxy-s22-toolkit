@@ -24,6 +24,12 @@ venv/
 # --- Runtime data (reports, backups, pulls, screenshots) ---
 data/
 
+# --- Diagnostics runtime output (regenerated on every run) ---
+/logs/
+/reports/
+/diagnostics/logs/
+/diagnostics/reports/
+
 # --- Legacy OneDrive placeholder directory (do not use; see README) ---
 storage/
 

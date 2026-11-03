@@ -60,6 +60,8 @@ class DiagnosticConfig:
     schedule: dict
     output: dict
     advanced: dict
+    # Optional sections consumed by other components (CLI/dashboard repair)
+    repair: dict = field(default_factory=dict)
 
 
 class DiagnosticsRunner:
@@ -517,6 +519,16 @@ class DiagnosticsRunner:
         
         return report
     
+    def _make_writable(self, file_path: Path) -> None:
+        """Remove read-only attribute on Windows to allow writing."""
+        import platform
+        if platform.system() == "Windows" and file_path.exists():
+            try:
+                import stat
+                file_path.chmod(file_path.stat().st_mode | stat.S_IWRITE)
+            except Exception:
+                pass
+
     def save_reports(self, report: HealthReport) -> None:
         """Save reports to files."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -529,6 +541,9 @@ class DiagnosticsRunner:
             json_file = Path(json_path)
             json_file.parent.mkdir(parents=True, exist_ok=True)
             
+            # Remove read-only attribute on Windows
+            self._make_writable(json_file)
+            
             with open(json_file, 'w') as f:
                 json.dump(asdict(report), f, indent=2, default=str)
             self.logger.info(f"JSON report saved to {json_file}")
@@ -539,6 +554,9 @@ class DiagnosticsRunner:
             summary_path = summary_path.replace("{{timestamp}}", timestamp)
             summary_file = Path(summary_path)
             summary_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Remove read-only attribute on Windows
+            self._make_writable(summary_file)
             
             with open(summary_file, 'w') as f:
                 f.write(self.format_summary(report))
@@ -740,6 +758,59 @@ class DiagnosticsRunner:
         
         try:
             self.run_all_checks()
+            report = self.generate_report()
+            self.save_reports(report)
+            self.send_notifications(report)
+            
+            # Print summary
+            print(self.format_summary(report))
+            
+            # Return exit code based on status
+            if report.overall_status == "critical":
+                return 2
+            elif report.overall_status == "warning":
+                return 1
+            return 0
+            
+        except Exception as e:
+            self.logger.error(f"Diagnostics failed: {e}", exc_info=True)
+            return 3
+
+    async def run_async(self) -> int:
+        """Run diagnostics asynchronously (for use within existing event loop)."""
+        self.logger.info("Starting Galaxy S22+ diagnostics (async)")
+        self.start_time = datetime.now()
+        
+        try:
+            # Create ADB client
+            self._create_client()
+            
+            # Run checks directly without asyncio.run()
+            if self.config.advanced.get('parallel_checks', True):
+                tasks = []
+                for name, func in [
+                    ("device_info", self.check_device_info),
+                    ("battery", self.check_battery),
+                    ("storage", self.check_storage),
+                    ("thermal", self.check_thermal),
+                    ("network", self.check_network),
+                    ("logcat", self.check_logcat),
+                    ("apps", self.check_apps),
+                ]:
+                    tasks.append(asyncio.to_thread(self._run_check, name, func))
+                await asyncio.gather(*tasks)
+            else:
+                for name, func in [
+                    ("device_info", self.check_device_info),
+                    ("battery", self.check_battery),
+                    ("storage", self.check_storage),
+                    ("thermal", self.check_thermal),
+                    ("network", self.check_network),
+                    ("logcat", self.check_logcat),
+                    ("apps", self.check_apps),
+                ]:
+                    self.results.append(self._run_check(name, func))
+            
             report = self.generate_report()
             self.save_reports(report)
             self.send_notifications(report)
