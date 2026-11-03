@@ -169,6 +169,10 @@ class AdbClient:
         cmd = self._base_cmd() + args
         last_error: Exception | None = None
 
+        # Set MSYS_NO_PATHCONV=1 to prevent MSYS path conversion on Windows
+        env = os.environ.copy()
+        env["MSYS_NO_PATHCONV"] = "1"
+
         for attempt in range(self.max_retries + 1):
             try:
                 result = subprocess.run(
@@ -179,6 +183,7 @@ class AdbClient:
                     input=input_data,
                     encoding="utf-8",
                     errors="replace",
+                    env=env,
                 )
                 if check and result.returncode != 0:
                     raise CommandFailedError(
@@ -218,6 +223,10 @@ class AdbClient:
         cmd = self._base_cmd() + args
         last_error: Exception | None = None
 
+        # Set MSYS_NO_PATHCONV=1 to prevent MSYS path conversion on Windows
+        env = os.environ.copy()
+        env["MSYS_NO_PATHCONV"] = "1"
+
         for attempt in range(self.max_retries + 1):
             try:
                 proc = await asyncio.create_subprocess_exec(
@@ -225,6 +234,7 @@ class AdbClient:
                     stdout=asyncio.subprocess.PIPE if capture else None,
                     stderr=asyncio.subprocess.PIPE if capture else None,
                     stdin=asyncio.subprocess.PIPE if input_data else None,
+                    env=env,
                 )
                 try:
                     stdout, stderr = await asyncio.wait_for(

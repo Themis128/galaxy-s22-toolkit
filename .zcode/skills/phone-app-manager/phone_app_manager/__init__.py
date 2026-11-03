@@ -23,11 +23,11 @@ def list_apps(args: argparse.Namespace, client: AdbClient) -> int:
 
     for i, app in enumerate(apps, 1):
         flags = []
-        if app.is_system_app:
+        if app.system_app:
             flags.append("SYSTEM")
-        if app.is_enabled:
+        if app.enabled:
             flags.append("ENABLED")
-        if app.is_debuggable:
+        if "DEBUGGABLE" in app.flags:
             flags.append("DEBUG")
 
         flag_str = f" [{', '.join(flags)}]" if flags else ""

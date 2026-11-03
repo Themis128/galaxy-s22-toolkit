@@ -20,6 +20,10 @@ dev = [
 requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+include = ["phone_file_transfer*"]
+exclude = ["data*", "tests*"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"
@@ -55,4 +59,4 @@ python_functions = ["test_*"]
 addopts = "-v --tb=short"
 
 [project.scripts]
-phone-file-transfer = "phone_file_transfer.__init__:main"
+phone-file-transfer = "phone_file_transfer.__main__:main"

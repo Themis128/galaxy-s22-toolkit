@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from pathlib import Path
@@ -62,6 +63,9 @@ def pull_file(args: argparse.Namespace, client: AdbClient) -> int:
         if local_path.is_dir():
             local_path = local_path / Path(remote_path).name
 
+        # Ensure parent directory exists
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+
         # Get file size first
         stat_result = client.execute("shell", "stat", "-c", "%s", remote_path)
         try:
@@ -75,10 +79,7 @@ def pull_file(args: argparse.Namespace, client: AdbClient) -> int:
 
         start_time = time.time()
 
-        def progress_callback(current: int, total: int) -> None:
-            show_progress(current, total, start_time, "Pull: ")
-
-        client.pull(remote_path, str(local_path), callback=progress_callback)
+        client.pull(remote_path, str(local_path))
 
         elapsed = time.time() - start_time
         if total_size:
@@ -191,6 +192,10 @@ def mkdir_remote(args: argparse.Namespace, client: AdbClient) -> int:
 
 
 def main() -> None:
+    # Set MSYS_NO_PATHCONV=1 to prevent MSYS/Git Bash path conversion
+    # (e.g. /sdcard/... -> C:/Program Files/Git/sdcard/...)
+    os.environ["MSYS_NO_PATHCONV"] = "1"
+
     parser = argparse.ArgumentParser(description="Phone File Transfer")
     parser.add_argument("--serial", help="Device serial")
     subparsers = parser.add_subparsers(dest="command", help="Commands")

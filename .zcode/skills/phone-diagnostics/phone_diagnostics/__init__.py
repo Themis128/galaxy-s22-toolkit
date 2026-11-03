@@ -26,7 +26,7 @@ def get_client(serial: str | None = None) -> AdbClient:
 def run_diagnostics(args: argparse.Namespace) -> int:
     """Run full diagnostic suite and output report."""
     client = get_client(args.serial)
-    
+
     # Initialize modules
     device = DeviceModule(client)
     battery = BatteryModule(client)
@@ -34,7 +34,7 @@ def run_diagnostics(args: argparse.Namespace) -> int:
     logcat = LogcatModule(client)
     network = NetworkModule(client)
     thermal = ThermalModule(client)
-    
+
     report = {
         "timestamp": datetime.now().isoformat(),
         "device": {},
@@ -44,9 +44,9 @@ def run_diagnostics(args: argparse.Namespace) -> int:
         "network": {},
         "thermal": {},
     }
-    
+
     errors = []
-    
+
     # Device info
     try:
         if not args.json and not args.quiet:
@@ -64,7 +64,7 @@ def run_diagnostics(args: argparse.Namespace) -> int:
         }
     except Exception as e:
         errors.append(f"Device info: {e}")
-    
+
     # Battery
     try:
         if not args.json and not args.quiet:
@@ -82,7 +82,7 @@ def run_diagnostics(args: argparse.Namespace) -> int:
         }
     except Exception as e:
         errors.append(f"Battery: {e}")
-    
+
     # Storage
     try:
         if not args.json and not args.quiet:
@@ -96,7 +96,7 @@ def run_diagnostics(args: argparse.Namespace) -> int:
         }
     except Exception as e:
         errors.append(f"Storage: {e}")
-    
+
     # Logcat (crashes/ANRs)
     try:
         if not args.json and not args.quiet:
@@ -111,7 +111,7 @@ def run_diagnostics(args: argparse.Namespace) -> int:
         }
     except Exception as e:
         errors.append(f"Logcat: {e}")
-    
+
     # Network
     try:
         if not args.json and not args.quiet:
@@ -126,20 +126,20 @@ def run_diagnostics(args: argparse.Namespace) -> int:
         }
     except Exception as e:
         errors.append(f"Network: {e}")
-    
-    # Thermal
-    try:
-        if not args.json and not args.quiet:
-            print("🌡️ Checking thermal...")
-        zones = thermal.get_thermal_zones()
-        throttling = thermal.get_throttling_status()
-        report["thermal"] = {
-            "zones": zones,
-            "throttling": throttling,
-        }
-    except Exception as e:
-        errors.append(f"Thermal: {e}")
-    
+
+# Thermal
+        try:
+            if not args.json and not args.quiet:
+                print("🌡️ Checking thermal...")
+            zones = thermal.get_thermal_zones()
+            throttling = thermal.get_throttling_status()
+            report["thermal"] = {
+                "zones": [{"name": z.name, "temp_c": z.temp_c, "type": z.type} for z in zones],
+                "throttling": throttling,
+            }
+        except Exception as e:
+            errors.append(f"Thermal: {e}")
+
     # Output
     if args.json:
         print(json.dumps({"success": len(errors) == 0, "report": report, "errors": errors}, indent=2))
@@ -148,22 +148,22 @@ def run_diagnostics(args: argparse.Namespace) -> int:
             print("\n" + "=" * 60)
             print(f"DIAGNOSTIC REPORT - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             print("=" * 60)
-            
+
             # Device
             d = report["device"]
             print(f"\n📱 Device: {d.get('manufacturer', 'Unknown')} {d.get('model', 'Unknown')}")
             print(f"   Android: {d.get('android_version', 'Unknown')} | Security Patch: {d.get('security_patch', 'Unknown')}")
             print(f"   Serial: {d.get('serial', 'Unknown')} | CPU: {d.get('cpu_abi', 'Unknown')}")
-            
+
             # Battery
             b = report["battery"]
             print(f"\n🔋 Battery: {b.get('level', '?')}% | {b.get('status', 'Unknown')} | Health: {b.get('health', 'Unknown')}")
             print(f"   Temp: {b.get('temperature', '?')}°C | Voltage: {b.get('voltage', '?')}mV | Cycles: {b.get('cycle_count', '?')}")
-            
+
             # Storage
             s = report["storage"]
             print(f"\n💾 Storage: {s.get('percent_used', '?')}% used ({s.get('used', 0)}/{s.get('total', 0)} bytes)")
-            
+
             # Logcat
             logcat_report = report["logcat"]
             print(f"\n📋 Logs (last {args.log_minutes} min): {logcat_report.get('crashes_found', 0)} crashes, {logcat_report.get('anrs_found', 0)} ANRs")
@@ -173,7 +173,7 @@ def run_diagnostics(args: argparse.Namespace) -> int:
             if logcat_report.get("anrs_found", 0) > 0:
                 for a in logcat_report["anrs"]:
                     print(f"   ⚠️  {a['package']}: {a['message']}")
-            
+
             # Network
             n = report["network"]
             conn = n.get("connectivity", {})
@@ -181,20 +181,20 @@ def run_diagnostics(args: argparse.Namespace) -> int:
             if n.get("wifi"):
                 w = n["wifi"]
                 print(f"   WiFi: {w.get('ssid', 'Unknown')} | Signal: {w.get('rssi', '?')} dBm | Link Speed: {w.get('link_speed', '?')} Mbps")
-            
+
             # Thermal
             t = report["thermal"]
             print(f"\n🌡️ Thermal: Throttling={'⚠️ YES' if t.get('throttling') else '✅ No'}")
             for zone in t.get("zones", [])[:3]:
                 print(f"   {zone.get('name', 'Unknown')}: {zone.get('temp', '?')}°C ({zone.get('type', 'Unknown')})")
-            
+
             if errors:
                 print(f"\n⚠️  Errors: {len(errors)}")
                 for e in errors:
                     print(f"   - {e}")
-            
+
             print("\n" + "=" * 60)
-    
+
     return 0 if len(errors) == 0 else 1
 
 
@@ -357,11 +357,11 @@ def cmd_thermal(args: argparse.Namespace) -> int:
         zones = thermal.get_thermal_zones()
         throttling = thermal.get_throttling_status()
         if args.json:
-            print(json.dumps({"zones": zones, "throttling": throttling}, indent=2))
+            print(json.dumps({"zones": [{"name": z.name, "temp_c": z.temp_c, "type": z.type} for z in zones], "throttling": throttling}, indent=2))
         else:
             print(f"Throttling: {'⚠️ YES' if throttling else '✅ No'}")
             for zone in zones:
-                print(f"  {zone.get('name', 'Unknown')}: {zone.get('temp', '?')}°C ({zone.get('type', 'Unknown')})")
+                print(f"  {zone.name}: {zone.temp_c}°C ({zone.type})")
         return 0
     except Exception as e:
         if args.json:

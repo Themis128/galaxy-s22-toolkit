@@ -15,10 +15,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "phone-lib" / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "diagnostics"))
 
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect  # noqa: E402
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, HTTPException, Depends, Header  # noqa: E402
 from fastapi.responses import HTMLResponse, JSONResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from fastapi.templating import Jinja2Templates  # noqa: E402
+from fastapi.security import APIKeyHeader  # noqa: E402
 
 from phone import create_client  # noqa: E402
 
