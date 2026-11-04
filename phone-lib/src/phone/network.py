@@ -52,6 +52,10 @@ class NetworkModule:
         """Check if Wi-Fi is connected."""
         try:
             output = self.client.execute("shell", "dumpsys", "wifi")
+            # Modern Android (12+/Samsung): check for Supplicant state COMPLETED
+            if "Supplicant state: COMPLETED" in output:
+                return True
+            # Legacy fallback: mNetworkInfo with CONNECTED
             return "mNetworkInfo" in output and "CONNECTED" in output
         except Exception:
             return False
@@ -60,13 +64,27 @@ class NetworkModule:
         """Get current Wi-Fi SSID."""
         try:
             output = self.client.execute("shell", "dumpsys", "wifi")
-            match = re.search(r'mNetworkInfo.*?SSID: "([^"]+)"', output, re.DOTALL)
+            # Modern Android (12+/Samsung): SSID embedded in Supplicant state line
+            # Format: "Supplicant state: COMPLETED\nmSupplicantStateName=COMPLETED\n..."
+            # with SSID in lines like: SSID: "COSMOTE1" or SSID: "\"COSMOTE1\"wpa3-sae"
+            match = re.search(r'Supplicant state:\s*COMPLETED.*?SSID:\s*"([^"]+)"', output, re.DOTALL)
+            if match:
+                ssid = match.group(1).strip()
+                # Clean up embedded security info (e.g., "COSMOTE1\"wpa3-sae" -> "COSMOTE1")
+                if '"' in ssid:
+                    ssid = ssid.split('"')[0]
+                return ssid
+            # Legacy parsing: mNetworkInfo block
+            match = re.search(r'mNetworkInfo.*?SSID:\s*"([^"]+)"', output, re.DOTALL)
             if match:
                 return match.group(1)
             # Alternative parsing
             match = re.search(r'SSID:\s*"([^"]+)"', output)
             if match:
-                return match.group(1)
+                ssid = match.group(1).strip()
+                if '"' in ssid:
+                    ssid = ssid.split('"')[0]
+                return ssid
         except Exception:
             pass
         return None
@@ -86,6 +104,11 @@ class NetworkModule:
         """Get Wi-Fi signal strength in dBm."""
         try:
             output = self.client.execute("shell", "dumpsys", "wifi")
+            # Modern Android (12+/Samsung): RSSI in Supplicant state block
+            match = re.search(r'Supplicant state:\s*COMPLETED.*?RSSI:\s*(-?\d+)', output, re.DOTALL)
+            if match:
+                return int(match.group(1))
+            # Legacy RSSI format
             match = re.search(r"RSSI:\s*(-?\d+)", output)
             if match:
                 return int(match.group(1))
