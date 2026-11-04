@@ -85,6 +85,9 @@ def main(argv: list[str] | None = None) -> int:
         "--confirm", action="store_true", help="required to execute; without it the call is refused"
     )
     args = parser.parse_args(argv)
+    if not args.base_url.lower().startswith(("http://", "https://")):
+        print("--base-url must use http:// or https://", file=sys.stderr)
+        return 2
     key = args.key or load_api_key()
 
     if args.cmd == "health":

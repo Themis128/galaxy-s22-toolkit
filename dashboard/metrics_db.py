@@ -8,7 +8,7 @@ import logging
 import sqlite3
 import threading
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -124,7 +124,7 @@ class MetricsDB:
         """Store a raw snapshot. Returns the row ID."""
         ts = snapshot.get("timestamp")
         if ts is None:
-            ts = datetime.utcnow().isoformat() + "Z"
+            ts = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
         with self.transaction() as conn:
             cur = conn.execute(
                 "INSERT INTO snapshots (ts_utc, device_json) VALUES (?, ?)",
@@ -154,7 +154,9 @@ class MetricsDB:
         metric_path: str | None = None,
     ) -> list[dict[str, Any]]:
         """Retrieve snapshots within the time window."""
-        cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat() + "Z"
+        cutoff = (
+            datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=hours)
+        ).isoformat() + "Z"
         with self.transaction() as conn:
             if metric_path:
                 # Extract a specific metric from the JSON blob
@@ -203,7 +205,9 @@ class MetricsDB:
 
     def compute_hourly_rollups(self, hours_back: int = 2) -> int:
         """Aggregate raw snapshots into hourly rollups for the recent window."""
-        cutoff = (datetime.utcnow() - timedelta(hours=hours_back)).isoformat() + "Z"
+        cutoff = (
+            datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=hours_back)
+        ).isoformat() + "Z"
         with self.transaction() as conn:
             # Pull raw snapshots in the window
             cur = conn.execute(
@@ -265,7 +269,9 @@ class MetricsDB:
 
     def compute_daily_rollups(self, days_back: int = 2) -> int:
         """Aggregate hourly rollups into daily rollups."""
-        cutoff_day = (datetime.utcnow() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+        cutoff_day = (
+            datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days_back)
+        ).strftime("%Y-%m-%d")
         with self.transaction() as conn:
             cur = conn.execute(
                 """
@@ -304,7 +310,9 @@ class MetricsDB:
 
     def get_hourly_trend(self, metric_path: str, hours: int = 24) -> list[dict[str, Any]]:
         """Hourly averaged values for a metric."""
-        cutoff = (datetime.utcnow() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:00:00")
+        cutoff = (
+            datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=hours)
+        ).strftime("%Y-%m-%d %H:00:00")
         with self.transaction() as conn:
             cur = conn.execute(
                 """
@@ -319,7 +327,9 @@ class MetricsDB:
 
     def get_daily_trend(self, metric_path: str, days: int = 30) -> list[dict[str, Any]]:
         """Daily averaged values for a metric."""
-        cutoff = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+        cutoff = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)).strftime(
+            "%Y-%m-%d"
+        )
         with self.transaction() as conn:
             cur = conn.execute(
                 """
@@ -334,7 +344,9 @@ class MetricsDB:
 
     def get_metric_stats(self, metric_path: str, hours: int = 24) -> dict[str, Any]:
         """Min/max/avg/count for a metric over the window."""
-        cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat() + "Z"
+        cutoff = (
+            datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=hours)
+        ).isoformat() + "Z"
         with self.transaction() as conn:
             cur = conn.execute(
                 """
@@ -359,7 +371,9 @@ class MetricsDB:
 
     def list_available_metrics(self, hours: int = 24) -> list[str]:
         """Discover metric paths that have data in the window (sampled)."""
-        cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat() + "Z"
+        cutoff = (
+            datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=hours)
+        ).isoformat() + "Z"
         with self.transaction() as conn:
             # Sample a few recent snapshots and extract keys
             cur = conn.execute(

@@ -52,7 +52,7 @@ All notable changes to the Galaxy S22+ toolkit. Format loosely follows
 - CI: dashboard test step; Windows runners with uv; wheel build; PyPI
   trusted publishing on release.
 
-## [0.2.0] - 2026-10-XX
+## [0.2.0] - 2026-11-04
 
 - Historical metrics persistence (SQLite, hourly/daily rollups, 10-day
   retention) with 5 trend API endpoints and dashboard trend charts.
@@ -61,7 +61,7 @@ All notable changes to the Galaxy S22+ toolkit. Format loosely follows
 - Installer E2E 8/8; silent scheduled task; wireless ADB auto-reconnect;
   Dockerized dashboard on tailnet; phone-repair skill; Groq bot API profile.
 
-## [0.1.0] - 2026-10-XX
+## [0.1.0] - 2026-11-03
 
 - Initial release: phone-lib (typed async ADB wrapper), diagnostics runner,
   6 ZCode skills, FastAPI dashboard, installer.

@@ -1,6 +1,6 @@
 """Tests for dashboard.metrics_db: persistence, trends, stats, pruning."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -18,7 +18,7 @@ def _snap(ts: datetime, level: float, temp: float = 30.0) -> dict:
 
 class TestSnapshotRoundtrip:
     def test_insert_and_get_latest(self, tmp_db):
-        ts = datetime.utcnow()
+        ts = datetime.now(timezone.utc).replace(tzinfo=None)
         tmp_db.insert_snapshot(_snap(ts, 88.0))
         latest = tmp_db.get_latest_snapshot()
         assert latest is not None
@@ -35,7 +35,7 @@ class TestSnapshotRoundtrip:
 
 class TestTrends:
     def test_hourly_trend_after_rollup(self, tmp_db):
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         for minutes_ago in range(0, 90, 5):  # 18 snapshots over 90 min
             ts = now - timedelta(minutes=minutes_ago)
             tmp_db.insert_snapshot(_snap(ts, 80.0 + minutes_ago % 5))
@@ -48,7 +48,7 @@ class TestTrends:
 
     def test_daily_trend_after_rollup(self, tmp_db):
         """Daily rollups aggregate from hourly rollups, so chain both."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         for days_ago in range(3):
             ts = now - timedelta(days=days_ago)
             tmp_db.insert_snapshot(_snap(ts, 70.0 + days_ago))
@@ -60,7 +60,7 @@ class TestTrends:
         assert tmp_db.get_daily_trend("metric_never_stored", days=30) == []
 
     def test_stats(self, tmp_db):
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         levels = [60.0, 60.5, 61.0, 61.5]
         for i, level in enumerate(levels):
             tmp_db.insert_snapshot(_snap(now - timedelta(minutes=i), level))
@@ -75,7 +75,7 @@ class TestTrends:
         assert stats.get("count", 0) == 0
 
     def test_list_available_metrics(self, tmp_db):
-        tmp_db.insert_snapshot(_snap(datetime.utcnow(), 55.0))
+        tmp_db.insert_snapshot(_snap(datetime.now(timezone.utc).replace(tzinfo=None), 55.0))
         metrics = tmp_db.list_available_metrics(hours=24)
         assert "battery.level" in metrics
         assert "memory.available_mb" in metrics
@@ -85,7 +85,7 @@ class TestRetention:
     def test_pruning_keeps_max_snapshots(self, tmp_db):
         db = MetricsDB(db_path=tmp_db.db_path, max_snapshots=5)
         for i in range(8):
-            ts = datetime.utcnow() - timedelta(minutes=i)
+            ts = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=i)
             db.insert_snapshot(_snap(ts, 50.0))
         latest = db.get_latest_snapshot()
         assert latest is not None

@@ -17,7 +17,7 @@ import argparse
 import json
 import sqlite3
 import statistics
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +32,7 @@ def _series(conn: sqlite3.Connection, expr: str, days: int) -> list[tuple[dateti
     rolls up hours_back=2 per cycle), so slopes/percentiles must come
     from raw rows.
     """
-    cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+    cutoff = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)).isoformat()
     rows = conn.execute(
         "SELECT ts_utc, json_extract(device_json, ?) FROM snapshots"
         " WHERE ts_utc >= ? AND json_valid(device_json) ORDER BY ts_utc",
@@ -66,7 +66,7 @@ def _slope_per_week(series: list[tuple[datetime, float]]) -> float | None:
 
 def battery_drain_rate(conn: sqlite3.Connection, days: int = 7) -> dict[str, Any]:
     """Average drain (% per hour) from raw snapshots while discharging."""
-    cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+    cutoff = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)).isoformat()
     rows = conn.execute(
         "SELECT ts_utc, device_json FROM snapshots WHERE ts_utc >= ? ORDER BY ts_utc",
         (cutoff,),
@@ -148,7 +148,7 @@ def _daily_means(series):
 
 def _storage_metric(conn: sqlite3.Connection, field: str, days: int):
     """Time series of a field from the /data entry of the storage array."""
-    cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+    cutoff = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)).isoformat()
     rows = conn.execute(
         "SELECT ts_utc, json_extract(device_json, '$.storage')"
         " FROM snapshots WHERE ts_utc >= ? AND json_valid(device_json)"
@@ -185,7 +185,7 @@ def percentile_pressure(
 
 def analyze(conn: sqlite3.Connection) -> dict[str, Any]:
     return {
-        "generated": datetime.utcnow().isoformat() + "Z",
+        "generated": datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z",
         "window_days": 7,
         "insights": [
             battery_drain_rate(conn),
@@ -222,6 +222,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--db", default=None, help="metrics DB path (default: newest backup)")
     parser.add_argument("--json", action="store_true", help="emit JSON")
+    parser.add_argument("--out", default=None, help="write the text report to this file")
     args = parser.parse_args(argv)
 
     db_path = Path(args.db) if args.db else newest_backup()
@@ -236,10 +237,13 @@ def main(argv: list[str] | None = None) -> int:
         report = analyze(conn)
     finally:
         conn.close()
-    if args.json:
-        print(json.dumps(report, indent=2))
+    text = json.dumps(report, indent=2) if args.json else format_report(report)
+    if args.out:
+        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.out).write_text(text + chr(10), encoding="utf-8")
+        print(f"report written to {args.out}")
     else:
-        print(format_report(report))
+        print(text)
     return 0
 
 

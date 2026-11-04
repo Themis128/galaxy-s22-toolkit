@@ -17,10 +17,10 @@ class TestStaticAndTrends:
         assert "battery.level" in metrics
 
     def test_hourly_trend_endpoint(self, api_client, tmp_db):
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
         for i in range(3):
-            ts = datetime.utcnow() - timedelta(minutes=i)
+            ts = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=i)
             tmp_db.insert_snapshot({"timestamp": ts.isoformat(), "battery": {"level": 70.0 + i}})
         tmp_db.compute_hourly_rollups(hours_back=1)
         r = api_client.get("/api/trends/hourly/battery.level?hours=24")
@@ -28,10 +28,10 @@ class TestStaticAndTrends:
         assert r.json()["data"]
 
     def test_stats_endpoint(self, api_client, tmp_db):
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
         for i, level in enumerate([80.0, 81.0, 82.0]):
-            ts = datetime.utcnow() - timedelta(minutes=i)
+            ts = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=i)
             tmp_db.insert_snapshot({"timestamp": ts.isoformat(), "battery": {"level": level}})
         r = api_client.get("/api/trends/stats/battery.level?hours=24")
         assert r.status_code == 200

@@ -16,9 +16,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import sqlite3
 import subprocess
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -119,11 +120,25 @@ def main(argv: list[str] | None = None) -> int:
         if latest is None:
             print("no backups yet (run tools/backup_metrics_db.py)")
             return 1
-        age = datetime.now() - datetime.fromtimestamp(latest.stat().st_mtime)
-        ok = age < timedelta(hours=26)
-        print(f"latest backup: {latest.name} ({age.total_seconds() / 3600:.1f}h old)")
+        age = datetime.now(timezone.utc).replace(tzinfo=None) - datetime.fromtimestamp(
+            latest.stat().st_mtime
+        )
+        ok_age = age < timedelta(hours=26)
+        # integrity: sqlite must report the file is a healthy, non-empty DB
+        try:
+            conn = sqlite3.connect(f"file:{latest}?mode=ro", uri=True)
+            integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
+            rows = conn.execute("SELECT COUNT(*) FROM snapshots").fetchone()[0]
+            conn.close()
+        except sqlite3.Error as exc:
+            print(f"latest backup unreadable: {latest.name}: {exc}")
+            return 1
+        ok = ok_age and integrity == "ok" and rows > 0
+        print(
+            f"latest backup: {latest.name} ({age.total_seconds() / 3600:.1f}h old,"
+            f" integrity={integrity}, {rows} snapshots)"
+        )
         return 0 if ok else 1
-
     if (
         subprocess.run(["docker", "compose", "ps", "-q"], cwd=REPO, capture_output=True).returncode
         != 0
