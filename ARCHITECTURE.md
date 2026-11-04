@@ -11,7 +11,7 @@
 │ dashboard/          FastAPI + WebSocket + Chart.js           │  Layer 4 — observe
 │  GET /api/health | GET /api/history | WS /ws/live            │
 ├──────────────────────────────────────────────────────────────┤
-│ .zcode/skills/      5 CLI skills (pip console scripts)       │  Layer 3 — act
+│ .zcode/skills/      6 CLI skills (pip console scripts)       │  Layer 3 — act
 │  phone-diagnostics, phone-screen-control,                    │
 │  phone-file-transfer, phone-logcat, phone-app-manager        │
 ├──────────────────────────────────────────────────────────────┤

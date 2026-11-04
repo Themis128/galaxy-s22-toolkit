@@ -28,6 +28,9 @@ install_package() {
     echo -e "${YELLOW}Installing ${name}...${NC}"
     if [[ -d "${path}" && -f "${path}/pyproject.toml" ]]; then
         cd "${path}"
+        # OneDrive-synced trees get the read-only attribute re-applied, which
+        # breaks setuptools' egg-info writes - force files writable first
+        find . -type f -exec chmod u+w {} + 2>/dev/null || true
         if pip install -e . --quiet; then
             echo -e "${GREEN}  ✓ ${name} installed successfully${NC}"
         else

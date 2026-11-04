@@ -111,6 +111,10 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "--tb=short",
+    # The OneDrive-synced tree re-applies the read-only attribute, so the
+    # cache provider's writes fail noisily on every run - disable it
+    "-p",
+    "no:cacheprovider",
 ]
 markers = [
     "device: marks tests as requiring a physical device",

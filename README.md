@@ -84,7 +84,7 @@ powershell -File scripts/finish-storage-cleanup.ps1
 
 ## For agents (Devin / ZCode)
 
-The 5 skills + rooting are pip-installed console commands, so any agent can use them
+The 6 skills + rooting are pip-installed console commands, so any agent can use them
 directly after one command:
 
 ```bash
