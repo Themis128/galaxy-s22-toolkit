@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+    branches: [master, develop]
+  release:
+    types: [published]
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  lint-and-type:
+    name: Lint & Type Check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+      - name: Install dependencies
+        run: |
+          uv pip install --system ruff mypy pytest pytest-asyncio
+          cd phone-lib && uv pip install --system -e ".[dev]"
+      - name: Ruff check
+        run: ruff check phone-lib diagnostics dashboard
+      - name: Ruff format check
+        run: ruff format --check phone-lib diagnostics dashboard
+      - name: Mypy
+        run: mypy phone-lib/src --strict
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+      - name: Install dependencies
+        run: |
+          uv pip install --system pytest pytest-asyncio pytest-mock
+          cd phone-lib && uv pip install --system -e ".[dev]"
+      - name: Run unit tests
+        run: pytest phone-lib/tests -v --tb=short -p no:cacheprovider -k "not device"
+        env:
+          PYTHONPATH: phone-lib/src
+
+  build-wheel:
+    name: Build Wheel
+    runs-on: windows-latest
+    needs: [lint-and-type, unit-tests]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+      - name: Build wheel
+        run: |
+          uv pip install --system build
+          cd phone-lib && python -m build --wheel
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: phone-lib-wheel
+          path: phone-lib/dist/*.whl
+          retention-days: 7
+
+  publish-pypi:
+    name: Publish to PyPI
+    runs-on: windows-latest
+    needs: build-wheel
+    if: github.event_name == 'release' && github.event.action == 'published'
+    permissions:
+      id-token: write  # For trusted publishing
+    steps:
+      - name: Download wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: phone-lib-wheel
+          path: dist
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
