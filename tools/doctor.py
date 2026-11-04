@@ -96,7 +96,9 @@ def check_backup() -> None:
     try:
         r = subprocess.run(
             [sys.executable, str(REPO / "tools" / "backup_metrics_db.py"), "--check"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         detail = (r.stdout or r.stderr).strip().splitlines()
         check("metrics-backup", r.returncode == 0, detail[-1] if detail else "no output")
