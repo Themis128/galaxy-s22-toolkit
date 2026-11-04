@@ -17,6 +17,13 @@ services:
       # need to approve a new key for the container
       - ${USERPROFILE}/.android/adbkey:/root/.android/adbkey:ro
       - ${USERPROFILE}/.android/adbkey.pub:/root/.android/adbkey.pub:ro
+      # Named volume (not a host bind): survives rebuilds and `compose down`,
+      # and keeps SQLite I/O out of the OneDrive-synced tree (OneDrive's
+      # read-only re-flagging corrupts live databases).
+      - metrics-data:/app/dashboard/data
     command: >
       sh -c "adb connect $$PHONE_ADB_HOST:5555 &&
              python dashboard/app.py"
+
+volumes:
+  metrics-data:
