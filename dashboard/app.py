@@ -25,12 +25,14 @@ from fastapi.security import APIKeyHeader  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 from phone import create_client  # noqa: E402
+from dashboard.metrics_db import init_metrics_db, get_metrics_db  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 COLLECT_INTERVAL_S = 5
-MAX_HISTORY = 17_280  # 24 h at 5 s cadence
+MAX_HISTORY = 17_280  # 24 h at 5 s cadence (in-memory ring buffer for WS live)
+MAX_DB_SNAPSHOTS = 172_800  # ~10 days at 5 s cadence (persisted to SQLite)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
@@ -253,6 +255,7 @@ def _collect_once() -> dict:
 async def collector_loop() -> None:
     """Periodically collect a snapshot, store it, and broadcast to WS clients."""
     global history
+    db = get_metrics_db()
     while True:
         try:
             loop = asyncio.get_running_loop()
@@ -261,6 +264,8 @@ async def collector_loop() -> None:
             if len(history) > MAX_HISTORY:
                 del history[: len(history) - MAX_HISTORY]
             await manager.broadcast({"type": "metrics", "data": metrics})
+            # Persist to SQLite (non-blocking in executor)
+            await loop.run_in_executor(None, db.insert_snapshot, metrics)
         except ConnectionError:
             # Device unplugged: keep the loop alive, retry after the interval.
             logger.warning("Device not connected; retrying in %ss", COLLECT_INTERVAL_S)
@@ -278,6 +283,8 @@ async def collector_loop() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start/stop the background collector around the app lifetime."""
+    # Initialize metrics database
+    init_metrics_db(max_snapshots=MAX_DB_SNAPSHOTS)
     task = asyncio.create_task(collector_loop())
     yield
     task.cancel()
@@ -344,6 +351,69 @@ async def api_history_metric(metric: str, hours: int = 24):
         except (KeyError, ValueError):
             continue
     return JSONResponse(out)
+
+
+# ===== Historical Trends API (persisted SQLite) =====
+
+@app.get("/api/trends/metrics")
+async def api_trends_metrics(hours: int = 24):
+    """List metric paths that have persisted data in the window."""
+    db = get_metrics_db()
+    try:
+        metrics = await asyncio.get_running_loop().run_in_executor(None, db.list_available_metrics, hours)
+    except Exception as exc:
+        logger.error("Failed to list metrics: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+    return JSONResponse({"metrics": metrics, "count": len(metrics)})
+
+
+@app.get("/api/trends/hourly/{metric_path:path}")
+async def api_trends_hourly(metric_path: str, hours: int = 24):
+    """Hourly averaged trend for a metric (dot-notation path, e.g. battery.level)."""
+    db = get_metrics_db()
+    try:
+        data = await asyncio.get_running_loop().run_in_executor(None, db.get_hourly_trend, metric_path, hours)
+    except Exception as exc:
+        logger.error("Failed to get hourly trend: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+    return JSONResponse({"metric": metric_path, "hours": hours, "data": data})
+
+
+@app.get("/api/trends/daily/{metric_path:path}")
+async def api_trends_daily(metric_path: str, days: int = 30):
+    """Daily averaged trend for a metric."""
+    db = get_metrics_db()
+    try:
+        data = await asyncio.get_running_loop().run_in_executor(None, db.get_daily_trend, metric_path, days)
+    except Exception as exc:
+        logger.error("Failed to get daily trend: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+    return JSONResponse({"metric": metric_path, "days": days, "data": data})
+
+
+@app.get("/api/trends/stats/{metric_path:path}")
+async def api_trends_stats(metric_path: str, hours: int = 24):
+    """Min/max/avg/count stats for a metric over the window."""
+    db = get_metrics_db()
+    try:
+        stats = await asyncio.get_running_loop().run_in_executor(None, db.get_metric_stats, metric_path, hours)
+    except Exception as exc:
+        logger.error("Failed to get metric stats: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+    return JSONResponse({"metric": metric_path, "hours": hours, "stats": stats})
+
+
+@app.post("/api/trends/rollup")
+async def api_trends_rollup(hours_back: int = 2, days_back: int = 2):
+    """Manually trigger hourly/daily rollup computation."""
+    db = get_metrics_db()
+    try:
+        hourly = await asyncio.get_running_loop().run_in_executor(None, db.compute_hourly_rollups, hours_back)
+        daily = await asyncio.get_running_loop().run_in_executor(None, db.compute_daily_rollups, days_back)
+    except Exception as exc:
+        logger.error("Rollup computation failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+    return JSONResponse({"hourly_inserted": hourly, "daily_inserted": daily})
 
 
 @app.websocket("/ws/live")
