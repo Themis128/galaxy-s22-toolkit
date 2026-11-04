@@ -85,7 +85,13 @@ jobs:
     name: Publish to PyPI
     runs-on: windows-latest
     needs: build-wheel
-    if: github.event_name == 'release' && github.event.action == 'published'
+    # Opt-in: set the repo variable ENABLE_PYPI=true (Settings -> Variables)
+    # AND configure trusted publishing on pypi.org for this repo first.
+    # Until then releases stay green with the publish job skipped.
+    if: >-
+      github.event_name == 'release' &&
+      github.event.action == 'published' &&
+      vars.ENABLE_PYPI == 'true'
     permissions:
       id-token: write  # For trusted publishing
     steps:
