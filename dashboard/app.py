@@ -321,7 +321,9 @@ async def api_health():
     loop = asyncio.get_running_loop()
     try:
         metrics = await loop.run_in_executor(None, _collect_once)
-    except ConnectionError:
+    except (ConnectionError, OSError):
+        # OSError covers FileNotFoundError when the adb binary itself is
+        # missing (bare CI runners) - still degrade to "device unreachable".
         return JSONResponse({"error": "Device not connected"}, status_code=503)
     except RuntimeError as exc:
         return JSONResponse({"error": str(exc)}, status_code=500)
