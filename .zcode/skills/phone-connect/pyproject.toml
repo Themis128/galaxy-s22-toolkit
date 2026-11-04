@@ -1,0 +1,5 @@
+[project]
+name = "phone-connect"
+version = "1.0.0"
+description = "Wireless ADB connection skill (implementation: tools/adb_connect.py)"
+requires-python = ">=3.10"

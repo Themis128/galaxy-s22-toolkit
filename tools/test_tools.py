@@ -8,6 +8,7 @@ TOOLS = Path(__file__).resolve().parents[1] / "tools"
 sys.path.insert(0, str(TOOLS))
 
 from clean_path_artifacts import ARTIFACT_CHAR, find_artifacts  # noqa: E402
+from dashboard_client import load_api_key  # noqa: E402
 from update_check import verdict_for_age  # noqa: E402
 
 
@@ -94,3 +95,16 @@ class TestFixOnedriveAttrs:
         cleared = clear_flags([target])
         assert cleared == 1
         assert find_readonly(tmp_path) == []
+
+
+class TestDashboardClient:
+    def test_load_api_key_returns_str_or_none(self):
+        """With the repo .env present the key parses; without it, None."""
+        key = load_api_key()
+        assert key is None or (isinstance(key, str) and len(key) > 10)
+
+    def test_repair_requires_confirm(self):
+        from dashboard_client import main
+
+        rc = main(["--base-url", "http://127.0.0.1:1", "repair", "clear_app_caches"])
+        assert rc == 2

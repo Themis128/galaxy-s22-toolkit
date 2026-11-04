@@ -1,0 +1,5 @@
+[project]
+name = "phone-remote-control"
+version = "1.0.0"
+description = "Dashboard REST API client skill (implementation: tools/dashboard_client.py)"
+requires-python = ">=3.10"

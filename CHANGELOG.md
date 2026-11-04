@@ -38,7 +38,12 @@ All notable changes to the Galaxy S22+ toolkit. Format loosely follows
   `install_git_hooks.py`, `doctor.py` (environment health incl. backup
   freshness), `update_check.py` (security-patch age verdict; can open the
   system update screen).
-- **Skills**: `phone-update-check`, `phone-doctor`.
+- **Skills**: `phone-update-check`, `phone-doctor`, `phone-connect`
+  (wireless ADB status/connect/reconnect), `phone-remote-control`
+  (dashboard REST API client; the Groq bot's client-side contract).
+- **tools/**: `adb_connect.py` (live-verified: auto re-established a
+  dropped Wi-Fi transport), `dashboard_client.py` (stdlib-only; verified
+  on localhost and the tailnet URL; refuses repairs without --confirm).
 - CI: dashboard test step; Windows runners with uv; wheel build; PyPI
   trusted publishing on release.
 
