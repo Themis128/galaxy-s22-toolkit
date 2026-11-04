@@ -75,7 +75,18 @@ class BatteryModule:
         elif data.get("Wireless powered") == "true":
             plugged_type = "Wireless"
 
-        # Get additional info from batterystats if available
+        # dumpsys battery exposes instantaneous current and the coulomb
+        # counter on Samsung devices (sysfs power_supply is adb-gated here)
+        current_ma: int | None = None
+        for key in ("current now", "Current now"):
+            if key in data and data[key].lstrip("-").isdigit():
+                current_ma = int(data[key])
+                break
+
+        charge_counter: int | None = None
+        if data.get("Charge counter", "").lstrip("-").isdigit():
+            charge_counter = int(data["Charge counter"])
+
         max_capacity = None
         current_capacity = None
         charge_cycles = None
@@ -95,6 +106,8 @@ class BatteryModule:
             max_capacity_mah=max_capacity,
             current_capacity_mah=current_capacity,
             charge_cycles=charge_cycles,
+            current_ma=current_ma,
+            charge_counter_uah=charge_counter,
             present=data.get("present", "true").lower() == "true",
             scale=scale,
         )

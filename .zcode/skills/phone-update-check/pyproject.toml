@@ -1,0 +1,5 @@
+[project]
+name = "phone-update-check"
+version = "1.0.0"
+description = "Security-patch age check skill (implementation: tools/update_check.py)"
+requires-python = ">=3.10"

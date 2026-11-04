@@ -1,0 +1,5 @@
+[project]
+name = "phone-doctor"
+version = "1.0.0"
+description = "Environment health check skill (implementation: tools/doctor.py)"
+requires-python = ">=3.10"

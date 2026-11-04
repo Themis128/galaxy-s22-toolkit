@@ -466,6 +466,7 @@ MOCK_BATTERY_DUMPSYS = """Current Battery Service state:
   Max charging current: 0
   Max charging voltage: 0
   Charge counter: 3200
+  current now: 76
   status: 2
   health: 2
   present: true
@@ -483,6 +484,7 @@ MOCK_BATTERY_DUMPSYS_DIFFERENT = """Current Battery Service state:
   Max charging current: 0
   Max charging voltage: 0
   Charge counter: 3200
+  current now: 76
   status: 3
   health: 3
   present: true

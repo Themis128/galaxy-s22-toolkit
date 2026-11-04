@@ -69,6 +69,10 @@ class BatteryInfo:
     max_capacity_mah: int | None = None
     current_capacity_mah: int | None = None
     charge_cycles: int | None = None
+    # Instantaneous current (mA) and coulomb counter (uAh) from dumpsys;
+    # Samsung exposes both there but not on the permission-gated sysfs.
+    current_ma: int | None = None
+    charge_counter_uah: int | None = None
     present: bool = True
     scale: int = 100
 
@@ -119,13 +123,6 @@ class BatteryInfo:
     def cycle_count(self) -> int | None:
         """Charge cycles (alias for diagnostics compatibility)."""
         return self.charge_cycles
-
-    @property
-    def current_ma(self) -> int | None:
-        """Current in milliamps (alias for diagnostics compatibility). Not directly available from dumpsys battery."""
-        # Android doesn't expose current directly via dumpsys battery
-        # Could be estimated from charge/discharge rate but not reliably
-        return None
 
     @property
     def capacity_mah(self) -> int | None:

@@ -708,6 +708,13 @@ async def devin_status():
                 "processes": processes[1:] if len(processes) > 1 else [],
             }
         )
+    except OSError as exc:
+        # Devin CLI/workdir/tools missing (e.g. inside the Docker
+        # container) - degrade like /api/health instead of a raw 500.
+        logger.warning("Devin endpoint unavailable: %s", exc)
+        raise HTTPException(
+            status_code=503, detail=f"Devin environment unavailable: {exc}"
+        ) from exc
     except Exception as exc:
         logger.error("Devin status check failed: %s", exc)
         return JSONResponse({"error": str(exc)}, status_code=500)
@@ -849,6 +856,13 @@ async def devin_read_file(path: str):
         )
     except UnicodeDecodeError:
         raise HTTPException(status_code=415, detail="File is not valid UTF-8 text") from None
+    except OSError as exc:
+        # Devin CLI/workdir/tools missing (e.g. inside the Docker
+        # container) - degrade like /api/health instead of a raw 500.
+        logger.warning("Devin endpoint unavailable: %s", exc)
+        raise HTTPException(
+            status_code=503, detail=f"Devin environment unavailable: {exc}"
+        ) from exc
     except Exception as exc:
         logger.error("File read failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -883,6 +897,13 @@ async def devin_write_file(request: FileRequest):
                 "status": "written",
             }
         )
+    except OSError as exc:
+        # Devin CLI/workdir/tools missing (e.g. inside the Docker
+        # container) - degrade like /api/health instead of a raw 500.
+        logger.warning("Devin endpoint unavailable: %s", exc)
+        raise HTTPException(
+            status_code=503, detail=f"Devin environment unavailable: {exc}"
+        ) from exc
     except Exception as exc:
         logger.error("File write failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -915,6 +936,13 @@ async def devin_delete_file(path: str):
                 "status": "deleted",
             }
         )
+    except OSError as exc:
+        # Devin CLI/workdir/tools missing (e.g. inside the Docker
+        # container) - degrade like /api/health instead of a raw 500.
+        logger.warning("Devin endpoint unavailable: %s", exc)
+        raise HTTPException(
+            status_code=503, detail=f"Devin environment unavailable: {exc}"
+        ) from exc
     except Exception as exc:
         logger.error("File delete failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -941,6 +969,13 @@ async def devin_logs(lines: int = 100):
                 "total_lines": len(log_lines),
             }
         )
+    except OSError as exc:
+        # Devin CLI/workdir/tools missing (e.g. inside the Docker
+        # container) - degrade like /api/health instead of a raw 500.
+        logger.warning("Devin endpoint unavailable: %s", exc)
+        raise HTTPException(
+            status_code=503, detail=f"Devin environment unavailable: {exc}"
+        ) from exc
     except Exception as exc:
         logger.error("Log read failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc

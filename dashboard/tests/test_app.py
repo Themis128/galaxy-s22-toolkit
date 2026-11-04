@@ -76,12 +76,25 @@ class TestAuth:
         r = api_client.get("/api/devin/status")
         assert r.status_code == 401
 
-    def test_devin_status_with_key(self, api_client):
+    def test_devin_status_with_key(self, api_client, monkeypatch):
         # key comes from conftest's env (no hardcoded credentials)
         key = os.environ["GROQ_BOT_API_KEY"]
         r = api_client.get("/api/devin/status", headers={"X-API-Key": key})
-        # 200 (Devin reachable) or 5xx (Devin CLI not installed in test env)
+        # 200 (Devin reachable) or graceful 5xx (Devin CLI not installed)
         assert r.status_code in (200, 500, 502, 503)
+
+    def test_devin_status_503_when_tool_missing(self, api_client, monkeypatch):
+        """Missing process-inspection tool (container) -> 503, not raw 500."""
+        from dashboard import app as app_module
+
+        def boom(*a, **k):
+            raise FileNotFoundError(2, "tasklist not found")
+
+        monkeypatch.setattr(app_module.subprocess, "run", boom)
+        key = os.environ["GROQ_BOT_API_KEY"]
+        r = api_client.get("/api/devin/status", headers={"X-API-Key": key})
+        assert r.status_code == 503
+        assert "Devin environment unavailable" in r.json()["detail"]
 
 
 class TestHealthGracefulDegradation:

@@ -15,6 +15,8 @@ class TestBatteryModule:
         battery = module.get_battery_info()
 
         assert battery.level == 78
+        assert battery.current_ma == 76
+        assert battery.charge_counter_uah == 3200
         assert battery.health == BatteryHealth.GOOD
         assert battery.status == BatteryStatus.CHARGING
         assert battery.temperature_c == 29.5
