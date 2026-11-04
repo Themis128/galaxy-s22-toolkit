@@ -67,7 +67,9 @@ class NetworkModule:
             # Modern Android (12+/Samsung): SSID embedded in Supplicant state line
             # Format: "Supplicant state: COMPLETED\nmSupplicantStateName=COMPLETED\n..."
             # with SSID in lines like: SSID: "COSMOTE1" or SSID: "\"COSMOTE1\"wpa3-sae"
-            match = re.search(r'Supplicant state:\s*COMPLETED.*?SSID:\s*"([^"]+)"', output, re.DOTALL)
+            match = re.search(
+                r'Supplicant state:\s*COMPLETED.*?SSID:\s*"([^"]+)"', output, re.DOTALL
+            )
             if match:
                 ssid = match.group(1).strip()
                 # Clean up embedded security info (e.g., "COSMOTE1\"wpa3-sae" -> "COSMOTE1")
@@ -105,7 +107,7 @@ class NetworkModule:
         try:
             output = self.client.execute("shell", "dumpsys", "wifi")
             # Modern Android (12+/Samsung): RSSI in Supplicant state block
-            match = re.search(r'Supplicant state:\s*COMPLETED.*?RSSI:\s*(-?\d+)', output, re.DOTALL)
+            match = re.search(r"Supplicant state:\s*COMPLETED.*?RSSI:\s*(-?\d+)", output, re.DOTALL)
             if match:
                 return int(match.group(1))
             # Legacy RSSI format
@@ -265,7 +267,9 @@ class NetworkModule:
     def get_wifi_scan(self) -> list[dict[str, Any]]:
         """Get Wi-Fi scan results."""
         try:
-            output = self.client.execute("shell", "dumpsys", "wifi", "|", "grep", "-A", "20", "ScanResult")
+            output = self.client.execute(
+                "shell", "dumpsys", "wifi", "|", "grep", "-A", "20", "ScanResult"
+            )
             networks = []
             for line in output.split("\n"):
                 line = line.strip()
@@ -306,7 +310,9 @@ class NetworkModule:
         except Exception:
             return []
 
-    def get_http_response_time(self, url: str = "http://www.google.com", timeout: int = 5) -> float | None:
+    def get_http_response_time(
+        self, url: str = "http://www.google.com", timeout: int = 5
+    ) -> float | None:
         """Measure HTTP response time."""
         try:
             start = time.time()
@@ -337,7 +343,12 @@ class NetworkModule:
             stats = {}
             for line in output.split("\n"):
                 line = line.strip()
-                if not line or line.startswith("Inter-|") or line.startswith("face") or line.startswith("Iface"):
+                if (
+                    not line
+                    or line.startswith("Inter-|")
+                    or line.startswith("face")
+                    or line.startswith("Iface")
+                ):
                     continue
                 parts = line.split()
                 if len(parts) >= 10:

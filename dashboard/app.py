@@ -11,21 +11,20 @@ import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "phone-lib" / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "diagnostics"))
 
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, HTTPException, Depends, Header  # noqa: E402
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect  # noqa: E402
 from fastapi.responses import HTMLResponse, JSONResponse  # noqa: E402
+from fastapi.security import APIKeyHeader  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from fastapi.templating import Jinja2Templates  # noqa: E402
-from fastapi.security import APIKeyHeader  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
+from dashboard.metrics_db import get_metrics_db, init_metrics_db  # noqa: E402
 from phone import create_client  # noqa: E402
-from dashboard.metrics_db import init_metrics_db, get_metrics_db  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -56,39 +55,43 @@ history: list[dict] = []
 
 async def verify_api_key(
     api_key: str = Depends(api_key_header),
-    x_forwarded_for: Optional[str] = Header(None),
+    x_forwarded_for: str | None = Header(None),
     request: Request = None,
 ) -> str:
     """Verify API key and optionally Tailscale IP allowlist."""
     if api_key != GROQ_BOT_API_KEY:
-        logger.warning("Invalid API key attempt from %s", request.client.host if request.client else "unknown")
+        logger.warning(
+            "Invalid API key attempt from %s", request.client.host if request.client else "unknown"
+        )
         raise HTTPException(status_code=401, detail="Invalid API key")
-    
+
     # Check Tailscale allowlist if configured
     if TAILSCALE_ALLOWLIST:
         client_ip = request.client.host if request.client else ""
         # Also check X-Forwarded-For for reverse proxy scenarios
         if x_forwarded_for:
             client_ip = x_forwarded_for.split(",")[0].strip()
-        
+
         if client_ip not in TAILSCALE_ALLOWLIST:
             logger.warning("IP %s not in Tailscale allowlist", client_ip)
             raise HTTPException(status_code=403, detail="IP not authorized")
-    
+
     return api_key
 
 
 class CommandRequest(BaseModel):
     """Request model for Devin command execution."""
+
     command: str
-    workdir: Optional[str] = None
+    workdir: str | None = None
     timeout: int = 300
 
 
 class FileRequest(BaseModel):
     """Request model for file operations."""
+
     path: str
-    content: Optional[str] = None
+    content: str | None = None
 
 
 class ConnectionManager:
@@ -162,9 +165,7 @@ def _collect_once() -> dict:
     running = client.apps.get_running_apps()
     rooted = client.root.is_rooted()
 
-    per_core_mhz = [
-        c.get("cpu MHz", 0) for c in cpu_raw.get("details", []) if isinstance(c, dict)
-    ]
+    per_core_mhz = [c.get("cpu MHz", 0) for c in cpu_raw.get("details", []) if isinstance(c, dict)]
     if not any(per_core_mhz):
         # /proc/cpuinfo lacks freq on modern Android; read cpufreq sysfs instead
         try:
@@ -206,7 +207,9 @@ def _collect_once() -> dict:
         "storage": [
             {
                 "mount_point": p.mount_point,
-                "total_gb": round(p.total_gb, ),
+                "total_gb": round(
+                    p.total_gb,
+                ),
                 "used_gb": round(p.used_gb, 2),
                 "free_gb": round(p.free_gb, 2),
                 "usage_percent": round(p.usage_percent, 1),
@@ -242,9 +245,9 @@ def _collect_once() -> dict:
         "memory": {
             "total_mb": round(mem_total_kb / 1024, 1),
             "available_mb": round(mem_avail_kb / 1024, 1),
-            "usage_percent": round(
-                (mem_total_kb - mem_avail_kb) / mem_total_kb * 100, 1
-            ) if mem_total_kb else 0.0,
+            "usage_percent": round((mem_total_kb - mem_avail_kb) / mem_total_kb * 100, 1)
+            if mem_total_kb
+            else 0.0,
         },
         "apps": {"running_count": len(running), "running": running[:10]},
         "root": {"rooted": rooted},
@@ -355,15 +358,18 @@ async def api_history_metric(metric: str, hours: int = 24):
 
 # ===== Historical Trends API (persisted SQLite) =====
 
+
 @app.get("/api/trends/metrics")
 async def api_trends_metrics(hours: int = 24):
     """List metric paths that have persisted data in the window."""
     db = get_metrics_db()
     try:
-        metrics = await asyncio.get_running_loop().run_in_executor(None, db.list_available_metrics, hours)
+        metrics = await asyncio.get_running_loop().run_in_executor(
+            None, db.list_available_metrics, hours
+        )
     except Exception as exc:
         logger.error("Failed to list metrics: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     return JSONResponse({"metrics": metrics, "count": len(metrics)})
 
 
@@ -372,10 +378,12 @@ async def api_trends_hourly(metric_path: str, hours: int = 24):
     """Hourly averaged trend for a metric (dot-notation path, e.g. battery.level)."""
     db = get_metrics_db()
     try:
-        data = await asyncio.get_running_loop().run_in_executor(None, db.get_hourly_trend, metric_path, hours)
+        data = await asyncio.get_running_loop().run_in_executor(
+            None, db.get_hourly_trend, metric_path, hours
+        )
     except Exception as exc:
         logger.error("Failed to get hourly trend: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     return JSONResponse({"metric": metric_path, "hours": hours, "data": data})
 
 
@@ -384,10 +392,12 @@ async def api_trends_daily(metric_path: str, days: int = 30):
     """Daily averaged trend for a metric."""
     db = get_metrics_db()
     try:
-        data = await asyncio.get_running_loop().run_in_executor(None, db.get_daily_trend, metric_path, days)
+        data = await asyncio.get_running_loop().run_in_executor(
+            None, db.get_daily_trend, metric_path, days
+        )
     except Exception as exc:
         logger.error("Failed to get daily trend: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     return JSONResponse({"metric": metric_path, "days": days, "data": data})
 
 
@@ -396,10 +406,12 @@ async def api_trends_stats(metric_path: str, hours: int = 24):
     """Min/max/avg/count stats for a metric over the window."""
     db = get_metrics_db()
     try:
-        stats = await asyncio.get_running_loop().run_in_executor(None, db.get_metric_stats, metric_path, hours)
+        stats = await asyncio.get_running_loop().run_in_executor(
+            None, db.get_metric_stats, metric_path, hours
+        )
     except Exception as exc:
         logger.error("Failed to get metric stats: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     return JSONResponse({"metric": metric_path, "hours": hours, "stats": stats})
 
 
@@ -408,11 +420,15 @@ async def api_trends_rollup(hours_back: int = 2, days_back: int = 2):
     """Manually trigger hourly/daily rollup computation."""
     db = get_metrics_db()
     try:
-        hourly = await asyncio.get_running_loop().run_in_executor(None, db.compute_hourly_rollups, hours_back)
-        daily = await asyncio.get_running_loop().run_in_executor(None, db.compute_daily_rollups, days_back)
+        hourly = await asyncio.get_running_loop().run_in_executor(
+            None, db.compute_hourly_rollups, hours_back
+        )
+        daily = await asyncio.get_running_loop().run_in_executor(
+            None, db.compute_daily_rollups, days_back
+        )
     except Exception as exc:
         logger.error("Rollup computation failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     return JSONResponse({"hourly_inserted": hourly, "daily_inserted": daily})
 
 
@@ -451,8 +467,10 @@ async def api_diagnostics_run():
 
 # ===== Repair API (for auto-repair with user approval) =====
 
+
 class RepairActionRequest(BaseModel):
     """Request model for repair action execution."""
+
     action_name: str
     kwargs: dict = {}
     # Non-auto-approve actions require explicit confirmation from the UI
@@ -461,6 +479,7 @@ class RepairActionRequest(BaseModel):
 
 class RepairMultipleRequest(BaseModel):
     """Request model for multiple repair actions."""
+
     action_names: list[str]
     kwargs: dict = {}
     confirm: bool = False
@@ -468,6 +487,7 @@ class RepairMultipleRequest(BaseModel):
 
 class RepairApprovalRequest(BaseModel):
     """Request model for repair approval."""
+
     action_name: str
     approved: bool
 
@@ -488,21 +508,23 @@ async def api_repair_actions():
 
     actions = await repair_module.get_pending_actions(diagnostics_results)
 
-    return JSONResponse({
-        "actions": [
-            {
-                "name": a.name,
-                "description": a.description,
-                "category": a.category,
-                "risk_level": a.risk_level,
-                "requires_root": a.requires_root,
-                "estimated_duration_s": a.estimated_duration_s,
-                "auto_approve": a.auto_approve,
-            }
-            for a in actions
-        ],
-        "total": len(actions),
-    })
+    return JSONResponse(
+        {
+            "actions": [
+                {
+                    "name": a.name,
+                    "description": a.description,
+                    "category": a.category,
+                    "risk_level": a.risk_level,
+                    "requires_root": a.requires_root,
+                    "estimated_duration_s": a.estimated_duration_s,
+                    "auto_approve": a.auto_approve,
+                }
+                for a in actions
+            ],
+            "total": len(actions),
+        }
+    )
 
 
 def _latest_diagnostics_results() -> list[dict] | None:
@@ -530,9 +552,7 @@ async def api_repair_execute(request: RepairActionRequest):
     if client is None:
         return JSONResponse({"error": "Device not connected"}, status_code=503)
 
-    repair_module = RepairModule(
-        client, history_path=_repair_history_path()
-    )
+    repair_module = RepairModule(client, history_path=_repair_history_path())
 
     # Server-side approval gate: non-auto-approve actions need confirm=True
     action = next(
@@ -612,16 +632,15 @@ async def api_repair_execute_multiple(request: RepairMultipleRequest):
 
     # Enforce confirmation for any requested non-auto-approve action
     gated = [
-        a for a in RepairModule.AVAILABLE_ACTIONS
+        a
+        for a in RepairModule.AVAILABLE_ACTIONS
         if a.name in request.action_names and not a.auto_approve
     ]
     if gated and not request.confirm:
         return JSONResponse(
             {
                 "status": "confirmation_required",
-                "actions": [
-                    {"action_name": a.name, "risk_level": a.risk_level} for a in gated
-                ],
+                "actions": [{"action_name": a.name, "risk_level": a.risk_level} for a in gated],
                 "message": "Some actions require explicit confirmation (set confirm=true).",
             },
             status_code=202,
@@ -630,11 +649,13 @@ async def api_repair_execute_multiple(request: RepairMultipleRequest):
     results = await repair_module.execute_multiple(request.action_names, **request.kwargs)
     for r in results:
         _notify_repair_toast(r)
-    return JSONResponse({
-        "results": [_repair_result_json(r) for r in results],
-        "total": len(results),
-        "successful": sum(1 for r in results if r.success),
-    })
+    return JSONResponse(
+        {
+            "results": [_repair_result_json(r) for r in results],
+            "total": len(results),
+            "successful": sum(1 for r in results if r.success),
+        }
+    )
 
 
 @app.get("/api/repair/history")
@@ -647,13 +668,16 @@ async def api_repair_history():
 
     repair_module = RepairModule(client, history_path=_repair_history_path())
 
-    return JSONResponse({
-        "history": [_repair_result_json(r) for r in repair_module.history],
-        "total": len(repair_module.history),
-    })
+    return JSONResponse(
+        {
+            "history": [_repair_result_json(r) for r in repair_module.history],
+            "total": len(repair_module.history),
+        }
+    )
 
 
 # ===== Devin Control API (for Groq bot via Tailscale) =====
+
 
 @app.get("/api/devin/status", dependencies=[Depends(verify_api_key)])
 async def devin_status():
@@ -667,16 +691,18 @@ async def devin_status():
             timeout=10,
         )
         processes = result.stdout.strip().split("\n") if result.stdout else []
-        
+
         # Check if Devin workdir exists
         workdir_exists = DEVIN_WORKDIR.exists()
-        
-        return JSONResponse({
-            "status": "running" if len(processes) > 1 else "stopped",
-            "workdir": str(DEVIN_WORKDIR),
-            "workdir_exists": workdir_exists,
-            "processes": processes[1:] if len(processes) > 1 else [],
-        })
+
+        return JSONResponse(
+            {
+                "status": "running" if len(processes) > 1 else "stopped",
+                "workdir": str(DEVIN_WORKDIR),
+                "workdir_exists": workdir_exists,
+                "processes": processes[1:] if len(processes) > 1 else [],
+            }
+        )
     except Exception as exc:
         logger.error("Devin status check failed: %s", exc)
         return JSONResponse({"error": str(exc)}, status_code=500)
@@ -686,16 +712,18 @@ async def devin_status():
 async def devin_execute(request: CommandRequest):
     """Execute a shell command in the Devin working directory."""
     workdir = Path(request.workdir) if request.workdir else DEVIN_WORKDIR
-    
+
     if not workdir.exists():
         raise HTTPException(status_code=404, detail=f"Working directory not found: {workdir}")
-    
+
     # Security: restrict to workdir and subdirectories
     try:
         workdir.resolve().relative_to(DEVIN_WORKDIR.resolve())
     except ValueError:
-        raise HTTPException(status_code=403, detail="Access denied: path outside Devin workdir")
-    
+        raise HTTPException(
+            status_code=403, detail="Access denied: path outside Devin workdir"
+        ) from None
+
     try:
         proc = await asyncio.create_subprocess_shell(
             request.command,
@@ -703,7 +731,7 @@ async def devin_execute(request: CommandRequest):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        
+
         try:
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(),
@@ -712,179 +740,205 @@ async def devin_execute(request: CommandRequest):
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
-            raise HTTPException(status_code=408, detail=f"Command timed out after {request.timeout}s")
-        
-        return JSONResponse({
-            "exit_code": proc.returncode,
-            "stdout": stdout.decode("utf-8", errors="replace"),
-            "stderr": stderr.decode("utf-8", errors="replace"),
-            "command": request.command,
-            "workdir": str(workdir),
-        })
+            raise HTTPException(
+                status_code=408, detail=f"Command timed out after {request.timeout}s"
+            ) from None
+
+        return JSONResponse(
+            {
+                "exit_code": proc.returncode,
+                "stdout": stdout.decode("utf-8", errors="replace"),
+                "stderr": stderr.decode("utf-8", errors="replace"),
+                "command": request.command,
+                "workdir": str(workdir),
+            }
+        )
     except HTTPException:
         raise
     except Exception as exc:
         logger.error("Command execution failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.get("/api/devin/files", dependencies=[Depends(verify_api_key)])
 async def devin_list_files(path: str = "."):
     """List files in Devin working directory."""
     target_path = (DEVIN_WORKDIR / path).resolve()
-    
+
     # Security: restrict to workdir and subdirectories
     try:
         target_path.relative_to(DEVIN_WORKDIR.resolve())
     except ValueError:
-        raise HTTPException(status_code=403, detail="Access denied: path outside Devin workdir")
-    
+        raise HTTPException(
+            status_code=403, detail="Access denied: path outside Devin workdir"
+        ) from None
+
     if not target_path.exists():
         raise HTTPException(status_code=404, detail="Path not found")
-    
+
     if target_path.is_file():
         # Return file info
         stat = target_path.stat()
-        return JSONResponse({
-            "type": "file",
-            "path": str(target_path.relative_to(DEVIN_WORKDIR)),
-            "size": stat.st_size,
-            "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-        })
-    
+        return JSONResponse(
+            {
+                "type": "file",
+                "path": str(target_path.relative_to(DEVIN_WORKDIR)),
+                "size": stat.st_size,
+                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            }
+        )
+
     # List directory contents
     items = []
     for item in target_path.iterdir():
         try:
             stat = item.stat()
-            items.append({
-                "name": item.name,
-                "path": str(item.relative_to(DEVIN_WORKDIR)),
-                "type": "directory" if item.is_dir() else "file",
-                "size": stat.st_size if item.is_file() else None,
-                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-            })
+            items.append(
+                {
+                    "name": item.name,
+                    "path": str(item.relative_to(DEVIN_WORKDIR)),
+                    "type": "directory" if item.is_dir() else "file",
+                    "size": stat.st_size if item.is_file() else None,
+                    "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                }
+            )
         except Exception:
             pass  # Skip items we can't stat
-    
-    return JSONResponse({
-        "path": str(target_path.relative_to(DEVIN_WORKDIR)) or ".",
-        "items": sorted(items, key=lambda x: (x["type"] == "file", x["name"].lower())),
-    })
+
+    return JSONResponse(
+        {
+            "path": str(target_path.relative_to(DEVIN_WORKDIR)) or ".",
+            "items": sorted(items, key=lambda x: (x["type"] == "file", x["name"].lower())),
+        }
+    )
 
 
 @app.get("/api/devin/files/read", dependencies=[Depends(verify_api_key)])
 async def devin_read_file(path: str):
     """Read a file from Devin working directory."""
     target_path = (DEVIN_WORKDIR / path).resolve()
-    
+
     # Security: restrict to workdir and subdirectories
     try:
         target_path.relative_to(DEVIN_WORKDIR.resolve())
     except ValueError:
-        raise HTTPException(status_code=403, detail="Access denied: path outside Devin workdir")
-    
+        raise HTTPException(
+            status_code=403, detail="Access denied: path outside Devin workdir"
+        ) from None
+
     if not target_path.exists() or not target_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
-    
+
     # Limit file size to 1MB for safety
     if target_path.stat().st_size > 1_048_576:
         raise HTTPException(status_code=413, detail="File too large (max 1MB)")
-    
+
     try:
         content = target_path.read_text(encoding="utf-8")
-        return JSONResponse({
-            "path": str(target_path.relative_to(DEVIN_WORKDIR)),
-            "content": content,
-            "size": len(content),
-        })
+        return JSONResponse(
+            {
+                "path": str(target_path.relative_to(DEVIN_WORKDIR)),
+                "content": content,
+                "size": len(content),
+            }
+        )
     except UnicodeDecodeError:
-        raise HTTPException(status_code=415, detail="File is not valid UTF-8 text")
+        raise HTTPException(status_code=415, detail="File is not valid UTF-8 text") from None
     except Exception as exc:
         logger.error("File read failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.post("/api/devin/files/write", dependencies=[Depends(verify_api_key)])
 async def devin_write_file(request: FileRequest):
     """Write a file to Devin working directory."""
     target_path = (DEVIN_WORKDIR / request.path).resolve()
-    
+
     # Security: restrict to workdir and subdirectories
     try:
         target_path.relative_to(DEVIN_WORKDIR.resolve())
     except ValueError:
-        raise HTTPException(status_code=403, detail="Access denied: path outside Devin workdir")
-    
+        raise HTTPException(
+            status_code=403, detail="Access denied: path outside Devin workdir"
+        ) from None
+
     # Create parent directories if needed
     target_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     try:
         if request.content is not None:
             target_path.write_text(request.content, encoding="utf-8")
         else:
             target_path.write_text("", encoding="utf-8")
-        
-        return JSONResponse({
-            "path": str(target_path.relative_to(DEVIN_WORKDIR)),
-            "size": target_path.stat().st_size,
-            "status": "written",
-        })
+
+        return JSONResponse(
+            {
+                "path": str(target_path.relative_to(DEVIN_WORKDIR)),
+                "size": target_path.stat().st_size,
+                "status": "written",
+            }
+        )
     except Exception as exc:
         logger.error("File write failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.delete("/api/devin/files", dependencies=[Depends(verify_api_key)])
 async def devin_delete_file(path: str):
     """Delete a file from Devin working directory."""
     target_path = (DEVIN_WORKDIR / path).resolve()
-    
+
     # Security: restrict to workdir and subdirectories
     try:
         target_path.relative_to(DEVIN_WORKDIR.resolve())
     except ValueError:
-        raise HTTPException(status_code=403, detail="Access denied: path outside Devin workdir")
-    
+        raise HTTPException(
+            status_code=403, detail="Access denied: path outside Devin workdir"
+        ) from None
+
     if not target_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
-    
+
     if target_path.is_dir():
         raise HTTPException(status_code=400, detail="Cannot delete directories via this endpoint")
-    
+
     try:
         target_path.unlink()
-        return JSONResponse({
-            "path": str(target_path.relative_to(DEVIN_WORKDIR)),
-            "status": "deleted",
-        })
+        return JSONResponse(
+            {
+                "path": str(target_path.relative_to(DEVIN_WORKDIR)),
+                "status": "deleted",
+            }
+        )
     except Exception as exc:
         logger.error("File delete failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.get("/api/devin/logs", dependencies=[Depends(verify_api_key)])
 async def devin_logs(lines: int = 100):
     """Get recent Devin logs from the working directory."""
     log_files = list(DEVIN_WORKDIR.rglob("*.log"))
-    
+
     if not log_files:
         return JSONResponse({"logs": [], "message": "No log files found"})
-    
+
     # Get the most recent log file
     latest_log = max(log_files, key=lambda f: f.stat().st_mtime)
-    
+
     try:
         content = latest_log.read_text(encoding="utf-8", errors="replace")
         log_lines = content.strip().split("\n")
-        return JSONResponse({
-            "log_file": str(latest_log.relative_to(DEVIN_WORKDIR)),
-            "lines": log_lines[-lines:] if len(log_lines) > lines else log_lines,
-            "total_lines": len(log_lines),
-        })
+        return JSONResponse(
+            {
+                "log_file": str(latest_log.relative_to(DEVIN_WORKDIR)),
+                "lines": log_lines[-lines:] if len(log_lines) > lines else log_lines,
+                "total_lines": len(log_lines),
+            }
+        )
     except Exception as exc:
         logger.error("Log read failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 def main() -> None:

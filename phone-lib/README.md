@@ -51,8 +51,11 @@ for part in storage.get_storage_info():
 
 # Stream logcat for crashes
 logcat = LogcatModule(client)
+
+
 def on_crash(entry):
     print(f"CRASH: {entry.tag}: {entry.message}")
+
 
 logcat.monitor_for_crashes(on_crash, package_name="com.example.app")
 ```
@@ -63,16 +66,18 @@ logcat.monitor_for_crashes(on_crash, package_name="com.example.app")
 import asyncio
 from phone import create_client
 
+
 async def main():
     client = create_client()
-    
+
     # Async shell command
     output = await client.shell_async("dumpsys battery")
     print(output)
-    
+
     # Async execute
     result = await client.execute_async("getprop", "ro.build.version.release")
     print(f"Android: {result}")
+
 
 asyncio.run(main())
 ```
@@ -120,11 +125,11 @@ half-failed reset never leaves a radio off.
 ```python
 from phone.notify import DesktopNotifier
 
-notifier = DesktopNotifier(app_id="Galaxy S22+ Toolkit",
-                           dashboard_url="http://127.0.0.1:8081")
+notifier = DesktopNotifier(app_id="Galaxy S22+ Toolkit", dashboard_url="http://127.0.0.1:8081")
 notifier.notify("Health check", "All checks passed")
 approved = await notifier.request_approval_async(
-    "Repair: reset_wifi", "Toggles Wi-Fi off/on", timeout_s=120)
+    "Repair: reset_wifi", "Toggles Wi-Fi off/on", timeout_s=120
+)
 ```
 
 Requires the optional `notify` extra (`pip install galaxy-s22-toolkit[notify]`,

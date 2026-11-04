@@ -25,7 +25,9 @@ class DeviceUnauthorizedError(DeviceNotFoundError):
     """Raised when device is connected but unauthorized (need to accept RSA key)."""
 
     def __init__(self, serial: str | None = None) -> None:
-        super().__init__(serial, f"Device unauthorized (accept RSA key on phone): {serial or 'unknown'}")
+        super().__init__(
+            serial, f"Device unauthorized (accept RSA key on phone): {serial or 'unknown'}"
+        )
 
 
 class CommandFailedError(PhoneError):
@@ -63,7 +65,9 @@ class ParseError(PhoneError):
 
     def __init__(self, raw_output: str, expected_format: str, message: str | None = None) -> None:
         msg = message or f"Failed to parse output (expected: {expected_format})"
-        super().__init__(msg, details={"raw_output": raw_output[:500], "expected_format": expected_format})
+        super().__init__(
+            msg, details={"raw_output": raw_output[:500], "expected_format": expected_format}
+        )
 
 
 class TimeoutError(PhoneError):

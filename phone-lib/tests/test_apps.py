@@ -118,9 +118,7 @@ class TestAppsModule:
         result = module.stop_app("com.example.app")
 
         assert result is True
-        mock_adb_client.execute.assert_called_with(
-            "shell", "am", "force-stop", "com.example.app"
-        )
+        mock_adb_client.execute.assert_called_with("shell", "am", "force-stop", "com.example.app")
 
     def test_restart_app(self, mock_adb_client):
         """Test restarting app."""

@@ -59,7 +59,9 @@ class LogStream:
         self.proc = self.client.shell_interactive(" ".join(shlex.quote(a) for a in args))
         return self
 
-    def __exit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: Any) -> None:
+    def __exit__(
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: Any
+    ) -> None:
         if self.proc:
             self.proc.terminate()
 
@@ -72,7 +74,7 @@ class LogStream:
         line = self.proc.stdout.readline()
         if not line:
             raise StopIteration
-        return line.rstrip('\n')
+        return line.rstrip("\n")
 
 
 class AdbClient:
@@ -125,6 +127,7 @@ class AdbClient:
         """Get LogcatModule instance."""
         if self._logcat_module is None:
             from .logcat import LogcatModule
+
             self._logcat_module = LogcatModule(self)
         return self._logcat_module
 
@@ -133,6 +136,7 @@ class AdbClient:
         """Get AppsModule instance."""
         if self._apps_module is None:
             from .apps import AppsModule
+
             self._apps_module = AppsModule(self)
         return self._apps_module
 
@@ -141,6 +145,7 @@ class AdbClient:
         """Get RootModule instance."""
         if self._root_module is None:
             from .root import RootModule
+
             self._root_module = RootModule(self)
         return self._root_module
 
@@ -149,6 +154,7 @@ class AdbClient:
         """Get DeviceModule instance."""
         if self._device_module is None:
             from .device import DeviceModule
+
             self._device_module = DeviceModule(self)
         return self._device_module
 
@@ -157,6 +163,7 @@ class AdbClient:
         """Get BatteryModule instance."""
         if self._battery_module is None:
             from .battery import BatteryModule
+
             self._battery_module = BatteryModule(self)
         return self._battery_module
 
@@ -165,6 +172,7 @@ class AdbClient:
         """Get StorageModule instance."""
         if self._storage_module is None:
             from .storage import StorageModule
+
             self._storage_module = StorageModule(self)
         return self._storage_module
 
@@ -173,6 +181,7 @@ class AdbClient:
         """Get NetworkModule instance."""
         if self._network_module is None:
             from .network import NetworkModule
+
             self._network_module = NetworkModule(self)
         return self._network_module
 
@@ -181,6 +190,7 @@ class AdbClient:
         """Get ThermalModule instance."""
         if self._thermal_module is None:
             from .thermal import ThermalModule
+
             self._thermal_module = ThermalModule(self)
         return self._thermal_module
 
@@ -189,6 +199,7 @@ class AdbClient:
         """Get ScreenModule instance."""
         if self._screen_module is None:
             from .screen import ScreenModule
+
             self._screen_module = ScreenModule(self)
         return self._screen_module
 
@@ -257,7 +268,7 @@ class AdbClient:
             except subprocess.TimeoutExpired as e:
                 last_error = TimeoutError(" ".join(cmd), timeout or self.timeout)
                 if attempt < self.max_retries:
-                    time.sleep(self.retry_delay * (2 ** attempt))
+                    time.sleep(self.retry_delay * (2**attempt))
                     continue
                 raise last_error from e
             except CommandFailedError:
@@ -265,7 +276,7 @@ class AdbClient:
             except Exception as e:
                 last_error = e
                 if attempt < self.max_retries:
-                    time.sleep(self.retry_delay * (2 ** attempt))
+                    time.sleep(self.retry_delay * (2**attempt))
                     continue
                 raise
 
@@ -332,7 +343,7 @@ class AdbClient:
             except Exception as e:
                 last_error = e
                 if attempt < self.max_retries:
-                    await asyncio.sleep(self.retry_delay * (2 ** attempt))
+                    await asyncio.sleep(self.retry_delay * (2**attempt))
                     continue
                 raise
 
@@ -457,7 +468,9 @@ class AdbClient:
         """Pull file from device."""
         return self.execute("pull", remote, local, timeout=timeout or 120.0)
 
-    def sync(self, local_dir: str, remote_dir: str = "/sdcard/", *, timeout: float | None = None) -> str:
+    def sync(
+        self, local_dir: str, remote_dir: str = "/sdcard/", *, timeout: float | None = None
+    ) -> str:
         """Sync directory to device."""
         return self.execute("sync", local_dir, remote_dir, timeout=timeout or 300.0)
 
@@ -467,7 +480,9 @@ class AdbClient:
         self.execute("shell", "screencap", "-p", remote_path)
         return remote_path
 
-    def screenshot_pull(self, local_path: str = ".", remote_path: str = "/sdcard/screenshot.png") -> str:
+    def screenshot_pull(
+        self, local_path: str = ".", remote_path: str = "/sdcard/screenshot.png"
+    ) -> str:
         """Take screenshot and pull to local."""
         self.screenshot(remote_path)
         self.pull(remote_path, local_path)
@@ -528,7 +543,9 @@ class AdbClient:
 
     def swipe(self, x1: int, y1: int, x2: int, y2: int, duration: int = 300) -> str:
         """Swipe between coordinates."""
-        return self.execute("shell", "input", "swipe", str(x1), str(y1), str(x2), str(y2), str(duration))
+        return self.execute(
+            "shell", "input", "swipe", str(x1), str(y1), str(x2), str(y2), str(duration)
+        )
 
     def text(self, text: str) -> str:
         """Type text (escapes spaces)."""
@@ -674,12 +691,15 @@ def create_client(
     if serial is None:
         serial = os.getenv("PHONE_ADB_SERIAL") or None
 
-    if serial is None and wireless and wireless.get("enabled", True) and wireless.get("auto_connect"):
+    if (
+        serial is None
+        and wireless
+        and wireless.get("enabled", True)
+        and wireless.get("auto_connect")
+    ):
         probe = AdbClient(serial=None, **kwargs)
         try:
-            authorized = [
-                d["serial"] for d in probe.list_devices() if d.get("state") == "device"
-            ]
+            authorized = [d["serial"] for d in probe.list_devices() if d.get("state") == "device"]
             if not authorized:
                 host = wireless.get("host")
                 if host:
@@ -687,15 +707,11 @@ def create_client(
                         "connect", f"{host}:{int(wireless.get('port', 5555))}", check=False
                     )
                     authorized = [
-                        d["serial"]
-                        for d in probe.list_devices()
-                        if d.get("state") == "device"
+                        d["serial"] for d in probe.list_devices() if d.get("state") == "device"
                     ]
             if authorized:
                 preferred = wireless.get("preferred_serial")
-                serial = (
-                    preferred if preferred in authorized else authorized[0]
-                )
+                serial = preferred if preferred in authorized else authorized[0]
         except Exception:
             logger.warning("Wireless ADB auto-connect failed", exc_info=True)
 

@@ -158,7 +158,11 @@ class DeviceModule:
         for path in ["/system/xbin/su", "/system/bin/su", "/su/bin/su", "/magisk/bin/su"]:
             try:
                 output = self.client.execute("shell", "ls", path, check=False)
-                if output.strip() and "No such file" not in output and "not found" not in output.lower():
+                if (
+                    output.strip()
+                    and "No such file" not in output
+                    and "not found" not in output.lower()
+                ):
                     return True
             except Exception:
                 pass
@@ -302,8 +306,7 @@ class DeviceModule:
         try:
             devices = self.client.list_devices()
             result["connected_devices"] = [
-                {"serial": d["serial"], "state": d["state"]}
-                for d in devices
+                {"serial": d["serial"], "state": d["state"]} for d in devices
             ]
         except Exception:
             pass

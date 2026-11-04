@@ -73,9 +73,7 @@ class TestHistoryPersistence:
 
     async def test_history_trimming(self, mock_adb_client, tmp_path):
         history_file = tmp_path / "repair_history.jsonl"
-        module = RepairModule(
-            mock_adb_client, history_path=history_file, history_max_entries=3
-        )
+        module = RepairModule(mock_adb_client, history_path=history_file, history_max_entries=3)
         for _ in range(5):
             await module.execute_action("clear_app_caches")
         assert len(module.history) == 3

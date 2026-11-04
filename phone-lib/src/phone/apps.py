@@ -182,7 +182,9 @@ class AppsModule:
         except Exception:
             return False
 
-    def install_app(self, apk_path: str, replace: bool = True, grant_permissions: bool = False) -> bool:
+    def install_app(
+        self, apk_path: str, replace: bool = True, grant_permissions: bool = False
+    ) -> bool:
         """Install an APK."""
         try:
             args = ["install"]
@@ -252,7 +254,15 @@ class AppsModule:
             if activity:
                 self.client.execute("shell", "am", "start", "-n", f"{package_name}/{activity}")
             else:
-                self.client.execute("shell", "monkey", "-p", package_name, "-c", "android.intent.category.LAUNCHER", "1")
+                self.client.execute(
+                    "shell",
+                    "monkey",
+                    "-p",
+                    package_name,
+                    "-c",
+                    "android.intent.category.LAUNCHER",
+                    "1",
+                )
             return True
         except Exception:
             return False
@@ -269,6 +279,7 @@ class AppsModule:
         """Restart an app."""
         self.stop_app(package_name)
         import time
+
         time.sleep(1)
         return self.start_app(package_name, activity)
 

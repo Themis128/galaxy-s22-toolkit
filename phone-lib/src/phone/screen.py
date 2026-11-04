@@ -241,7 +241,9 @@ class ScreenModule:
     def set_orientation(self, orientation: int) -> bool:
         """Set screen orientation (0=default, 1=landscape, 2=portrait, 3=reverse landscape, 4=reverse portrait)."""
         try:
-            self.client.execute("shell", "settings", "put", "system", "user_rotation", str(orientation))
+            self.client.execute(
+                "shell", "settings", "put", "system", "user_rotation", str(orientation)
+            )
             return True
         except Exception:
             return False

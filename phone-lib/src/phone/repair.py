@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 @dataclass(slots=True)
 class RepairAction:
     """A single repair action that can be executed."""
+
     name: str
     description: str
     category: str  # storage, apps, network, logcat
@@ -40,6 +41,7 @@ class RepairAction:
 @dataclass(slots=True)
 class RepairResult:
     """Result of a repair action execution."""
+
     action: RepairAction
     success: bool
     message: str
@@ -51,6 +53,7 @@ class RepairResult:
 
 class RepairModule:
     """Module for executing approved repair actions on the device."""
+
     # All available repair actions - defined here for transparency
     AVAILABLE_ACTIONS: list[RepairAction] = [
         # Storage repairs
@@ -296,7 +299,7 @@ class RepairModule:
             return
         try:
             lines = self.history_path.read_text(encoding="utf-8").splitlines()
-            for line in lines[-self.history_max_entries:]:
+            for line in lines[-self.history_max_entries :]:
                 line = line.strip()
                 if not line:
                     continue
@@ -311,17 +314,23 @@ class RepairModule:
                     estimated_duration_s=action_data.get("estimated_duration_s", 30),
                     auto_approve=action_data.get("auto_approve", False),
                 )
-                self.history.append(RepairResult(
-                    action=action,
-                    success=data.get("success", False),
-                    message=data.get("message", ""),
-                    details=data.get("details", {}),
-                    duration_ms=data.get("duration_ms", 0.0),
-                    timestamp=datetime.fromisoformat(data.get("timestamp")) if data.get("timestamp") else datetime.now(),
-                    requires_reboot=data.get("requires_reboot", False),
-                ))
+                self.history.append(
+                    RepairResult(
+                        action=action,
+                        success=data.get("success", False),
+                        message=data.get("message", ""),
+                        details=data.get("details", {}),
+                        duration_ms=data.get("duration_ms", 0.0),
+                        timestamp=datetime.fromisoformat(data.get("timestamp"))
+                        if data.get("timestamp")
+                        else datetime.now(),
+                        requires_reboot=data.get("requires_reboot", False),
+                    )
+                )
             if self.history:
-                logger.info("Loaded %d repair history entries from %s", len(self.history), self.history_path)
+                logger.info(
+                    "Loaded %d repair history entries from %s", len(self.history), self.history_path
+                )
         except Exception as exc:
             logger.warning("Could not load repair history from %s: %s", self.history_path, exc)
             self.history = []
@@ -331,7 +340,7 @@ class RepairModule:
         self.history.append(result)
         # Trim in-memory history to the most recent entries
         if len(self.history) > self.history_max_entries:
-            self.history = self.history[-self.history_max_entries:]
+            self.history = self.history[-self.history_max_entries :]
         if not self.history_path:
             return
             return
@@ -343,12 +352,14 @@ class RepairModule:
             lines = self.history_path.read_text(encoding="utf-8").splitlines()
             if len(lines) > self.history_max_entries:
                 self.history_path.write_text(
-                    "\n".join(lines[-self.history_max_entries:]) + "\n", encoding="utf-8"
+                    "\n".join(lines[-self.history_max_entries :]) + "\n", encoding="utf-8"
                 )
         except Exception as exc:
             logger.warning("Could not persist repair history to %s: %s", self.history_path, exc)
 
-    async def get_pending_actions(self, diagnostics_results: list[dict[str, Any]] | None = None) -> list[RepairAction]:
+    async def get_pending_actions(
+        self, diagnostics_results: list[dict[str, Any]] | None = None
+    ) -> list[RepairAction]:
         """Get list of recommended repair actions based on diagnostics.
 
         Args:
@@ -431,7 +442,9 @@ class RepairModule:
         action = next((a for a in self.AVAILABLE_ACTIONS if a.name == action_name), None)
         if not action:
             return RepairResult(
-                action=RepairAction(name=action_name, description="", category="", risk_level="high"),
+                action=RepairAction(
+                    name=action_name, description="", category="", risk_level="high"
+                ),
                 success=False,
                 message=f"Unknown action: {action_name}",
             )
@@ -535,13 +548,16 @@ class RepairModule:
         for dir_path in temp_dirs:
             try:
                 # List files first
-                output = await self.client.execute_async("shell", f"ls -la {dir_path} 2>/dev/null | wc -l")
+                output = await self.client.execute_async(
+                    "shell", f"ls -la {dir_path} 2>/dev/null | wc -l"
+                )
                 count = int(output.strip()) - 1  # subtract header line
 
                 if count > 0:
                     # Remove files (not directories)
-                    await self.client.execute_async("shell",
-                        f"find {dir_path} -type f -mtime +1 -delete 2>/dev/null")
+                    await self.client.execute_async(
+                        "shell", f"find {dir_path} -type f -mtime +1 -delete 2>/dev/null"
+                    )
 
                     total_removed += count
             except Exception:
@@ -558,16 +574,19 @@ class RepairModule:
         """Remove old tombstone crash dumps (requires root)."""
         action = next(a for a in self.AVAILABLE_ACTIONS if a.name == "remove_tombstones")
         try:
-            count_out = await self.client.execute_async("shell",
-                "ls -1 /data/tombstones/ 2>/dev/null | wc -l")
+            count_out = await self.client.execute_async(
+                "shell", "ls -1 /data/tombstones/ 2>/dev/null | wc -l"
+            )
             count = int(count_out.strip())
             new_count = count
 
             if count > 0:
-                await self.client.execute_async("shell",
-                    "find /data/tombstones -type f -mtime +3 -delete 2>/dev/null")
-                new_count_out = await self.client.execute_async("shell",
-                    "ls -1 /data/tombstones/ 2>/dev/null | wc -l")
+                await self.client.execute_async(
+                    "shell", "find /data/tombstones -type f -mtime +3 -delete 2>/dev/null"
+                )
+                new_count_out = await self.client.execute_async(
+                    "shell", "ls -1 /data/tombstones/ 2>/dev/null | wc -l"
+                )
                 new_count = int(new_count_out.strip())
 
             removed = count - new_count
@@ -597,16 +616,19 @@ class RepairModule:
         """Remove old ANR trace files (requires root)."""
         action = next(a for a in self.AVAILABLE_ACTIONS if a.name == "remove_anr_traces")
         try:
-            count_out = await self.client.execute_async("shell",
-                "ls -1 /data/anr/ 2>/dev/null | wc -l")
+            count_out = await self.client.execute_async(
+                "shell", "ls -1 /data/anr/ 2>/dev/null | wc -l"
+            )
             count = int(count_out.strip())
             new_count = count
 
             if count > 0:
-                await self.client.execute_async("shell",
-                    "find /data/anr -type f -mtime +3 -delete 2>/dev/null")
-                new_count_out = await self.client.execute_async("shell",
-                    "ls -1 /data/anr/ 2>/dev/null | wc -l")
+                await self.client.execute_async(
+                    "shell", "find /data/anr -type f -mtime +3 -delete 2>/dev/null"
+                )
+                new_count_out = await self.client.execute_async(
+                    "shell", "ls -1 /data/anr/ 2>/dev/null | wc -l"
+                )
                 new_count = int(new_count_out.strip())
 
             removed = count - new_count
@@ -637,15 +659,17 @@ class RepairModule:
         try:
             threshold_mb = kwargs.get("threshold_mb", 100)
 
-            output = await self.client.execute_async("shell",
-                f"find /sdcard -type f -size +{threshold_mb}M 2>/dev/null | head -20")
+            output = await self.client.execute_async(
+                "shell", f"find /sdcard -type f -size +{threshold_mb}M 2>/dev/null | head -20"
+            )
 
             files = []
             for line in output.strip().splitlines():
                 if line:
                     # Get file size
-                    size_out = await self.client.execute_async("shell",
-                        f"du -h '{line}' 2>/dev/null | cut -f1")
+                    size_out = await self.client.execute_async(
+                        "shell", f"du -h '{line}' 2>/dev/null | cut -f1"
+                    )
                     size = size_out.strip()
                     files.append({"path": line, "size": size})
 
@@ -705,7 +729,9 @@ class RepairModule:
         return RepairResult(
             action=action,
             success=True,
-            message=f"Force stopped {len(stopped)} misbehaving apps" if stopped else "No misbehaving apps to stop",
+            message=f"Force stopped {len(stopped)} misbehaving apps"
+            if stopped
+            else "No misbehaving apps to stop",
             details={"stopped": stopped, "crash_packages": sorted(crash_packages)[:10]},
         )
 
@@ -742,14 +768,16 @@ class RepairModule:
         for pkg in self.SAMSUNG_BLOATWARE:
             try:
                 # Check if installed and enabled
-                output = await self.client.execute_async("shell",
-                    f"pm list packages -d {pkg} 2>/dev/null")
+                output = await self.client.execute_async(
+                    "shell", f"pm list packages -d {pkg} 2>/dev/null"
+                )
                 if pkg in output:
                     already_disabled.append(pkg)
                     continue
 
-                output = await self.client.execute_async("shell",
-                    f"pm list packages {pkg} 2>/dev/null")
+                output = await self.client.execute_async(
+                    "shell", f"pm list packages {pkg} 2>/dev/null"
+                )
                 if pkg in output:
                     await self.client.execute_async("shell", f"pm disable-user --user 0 {pkg}")
                     disabled.append(pkg)
@@ -914,7 +942,9 @@ class RepairModule:
             await self.client.execute_async("shell", "settings put global airplane_mode_on 0")
 
             return RepairResult(
-                action=next(a for a in self.AVAILABLE_ACTIONS if a.name == "reset_network_settings"),
+                action=next(
+                    a for a in self.AVAILABLE_ACTIONS if a.name == "reset_network_settings"
+                ),
                 success=True,
                 message="Network settings reset (Wi-Fi, mobile data, DNS cache flushed)",
                 details={},
@@ -922,7 +952,9 @@ class RepairModule:
             )
         except Exception as e:
             return RepairResult(
-                action=next(a for a in self.AVAILABLE_ACTIONS if a.name == "reset_network_settings"),
+                action=next(
+                    a for a in self.AVAILABLE_ACTIONS if a.name == "reset_network_settings"
+                ),
                 success=False,
                 message=f"Failed to reset network settings: {e}",
             )
@@ -967,8 +999,9 @@ class RepairModule:
             total_removed = 0
             for dir_path in log_dirs:
                 try:
-                    await self.client.execute_async("shell",
-                        f"find {dir_path} -type f -mtime +7 -delete 2>/dev/null")
+                    await self.client.execute_async(
+                        "shell", f"find {dir_path} -type f -mtime +7 -delete 2>/dev/null"
+                    )
                     total_removed += 1
                 except Exception:
                     pass
@@ -1001,8 +1034,7 @@ class RepairModule:
             for pkg_pattern in noisy_packages:
                 try:
                     # Set log level to INFO (suppress VERBOSE/DEBUG)
-                    await self.client.execute_async("shell",
-                        f"setprop log.tag.{pkg_pattern} INFO")
+                    await self.client.execute_async("shell", f"setprop log.tag.{pkg_pattern} INFO")
                     set_count += 1
                 except Exception:
                     pass

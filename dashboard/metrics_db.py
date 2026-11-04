@@ -10,7 +10,7 @@ import threading
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -115,8 +115,10 @@ class MetricsDB:
                 conn.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
             elif row["version"] < SCHEMA_VERSION:
                 # Future migrations would go here
-                conn.execute("UPDATE schema_version SET version = ? WHERE version = ?",
-                           (SCHEMA_VERSION, row["version"]))
+                conn.execute(
+                    "UPDATE schema_version SET version = ? WHERE version = ?",
+                    (SCHEMA_VERSION, row["version"]),
+                )
 
     def insert_snapshot(self, snapshot: dict[str, Any]) -> int:
         """Store a raw snapshot. Returns the row ID."""
@@ -149,7 +151,7 @@ class MetricsDB:
         self,
         hours: int = 24,
         limit: int = 10000,
-        metric_path: Optional[str] = None,
+        metric_path: str | None = None,
     ) -> list[dict[str, Any]]:
         """Retrieve snapshots within the time window."""
         cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat() + "Z"
@@ -172,12 +174,10 @@ class MetricsDB:
                 )
                 return [json.loads(r["device_json"]) for r in cur.fetchall()]
 
-    def get_latest_snapshot(self) -> Optional[dict[str, Any]]:
+    def get_latest_snapshot(self) -> dict[str, Any] | None:
         """Get the most recent snapshot."""
         with self.transaction() as conn:
-            cur = conn.execute(
-                "SELECT device_json FROM snapshots ORDER BY ts_utc DESC LIMIT 1"
-            )
+            cur = conn.execute("SELECT device_json FROM snapshots ORDER BY ts_utc DESC LIMIT 1")
             row = cur.fetchone()
             return json.loads(row["device_json"]) if row else None
 
@@ -216,6 +216,7 @@ class MetricsDB:
 
             # Group by hour
             from collections import defaultdict
+
             hourly: dict[str, list[dict]] = defaultdict(list)
             for r in rows:
                 ts = r["ts_utc"]
@@ -288,8 +289,13 @@ class MetricsDB:
                         sample_count = excluded.sample_count,
                         created_at = datetime('now')
                     """,
-                    (r["day_start_utc"] + " 00:00:00", r["metric_path"], r["metric_type"],
-                     r["avg_val"], r["total_count"]),
+                    (
+                        r["day_start_utc"] + " 00:00:00",
+                        r["metric_path"],
+                        r["metric_type"],
+                        r["avg_val"],
+                        r["total_count"],
+                    ),
                 )
                 inserted += 1
             return inserted
@@ -340,7 +346,13 @@ class MetricsDB:
                 FROM snapshots
                 WHERE ts_utc >= ? AND json_type(json_extract(device_json, ?)) IN ('integer', 'real')
                 """,
-                (f"$.{metric_path}", f"$.{metric_path}", f"$.{metric_path}", cutoff, f"$.{metric_path}"),
+                (
+                    f"$.{metric_path}",
+                    f"$.{metric_path}",
+                    f"$.{metric_path}",
+                    cutoff,
+                    f"$.{metric_path}",
+                ),
             )
             row = cur.fetchone()
             return dict(row) if row else {}
@@ -368,10 +380,10 @@ class MetricsDB:
 
 
 # Global instance (initialized in dashboard/app.py)
-metrics_db: Optional[MetricsDB] = None
+metrics_db: MetricsDB | None = None
 
 
-def init_metrics_db(db_path: Optional[Path] = None, max_snapshots: int = 172800) -> MetricsDB:
+def init_metrics_db(db_path: Path | None = None, max_snapshots: int = 172800) -> MetricsDB:
     """Initialize the global metrics database."""
     global metrics_db
     metrics_db = MetricsDB(db_path or DB_PATH, max_snapshots)

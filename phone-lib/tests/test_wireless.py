@@ -17,11 +17,7 @@ class FakeAdb:
     def __init__(self, serial=None, **kwargs):
         self.serial = serial
         self.connect_calls: list[str] = []
-        self.devices = (
-            []
-            if FakeAdb.start_empty
-            else [{"serial": "RFCTA0AEKZP", "state": "device"}]
-        )
+        self.devices = [] if FakeAdb.start_empty else [{"serial": "RFCTA0AEKZP", "state": "device"}]
         FakeAdb.instances.append(self)
 
     def list_devices(self):
@@ -59,9 +55,7 @@ class TestCreateClientResolution:
         assert _connect_calls() == []
 
     def test_device_attached_uses_it_without_connect(self):
-        client = create_client(
-            wireless={"enabled": True, "host": "1.2.3.4", "auto_connect": True}
-        )
+        client = create_client(wireless={"enabled": True, "host": "1.2.3.4", "auto_connect": True})
         assert client.serial == "RFCTA0AEKZP"
         assert _connect_calls() == []
 
@@ -94,9 +88,7 @@ class TestCreateClientResolution:
 
     def test_disabled_wireless_never_connects(self):
         FakeAdb.start_empty = True
-        create_client(
-            wireless={"enabled": False, "host": "1.2.3.4", "auto_connect": True}
-        )
+        create_client(wireless={"enabled": False, "host": "1.2.3.4", "auto_connect": True})
         assert _connect_calls() == []
 
     def test_auto_connect_failure_is_tolerated(self, monkeypatch):

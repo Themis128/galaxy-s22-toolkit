@@ -136,13 +136,14 @@ class TestAdbClient:
     def test_device_not_found_error(self):
         """Test DeviceNotFoundError is raised when no devices."""
         client = AdbClient()
-        with patch.object(client, 'list_devices', return_value=[]):
+        with patch.object(client, "list_devices", return_value=[]):
             with pytest.raises(DeviceNotFoundError):
                 client.get_serial()
 
     def test_command_timeout_error(self):
         """Test TimeoutError on timeout."""
         from phone.exceptions import TimeoutError as PhoneTimeoutError
+
         client = AdbClient()
         client._run = MagicMock(side_effect=PhoneTimeoutError("adb shell sleep 60", 1.0))
 
@@ -152,8 +153,11 @@ class TestAdbClient:
     def test_adb_error_on_failure(self):
         """Test CommandFailedError on command failure."""
         from phone.exceptions import CommandFailedError as PhoneCommandFailedError
+
         client = AdbClient()
-        client._run = MagicMock(side_effect=PhoneCommandFailedError("adb shell invalid_command", 1, "", "error message"))
+        client._run = MagicMock(
+            side_effect=PhoneCommandFailedError("adb shell invalid_command", 1, "", "error message")
+        )
 
         with pytest.raises(PhoneCommandFailedError):
             client.execute("shell", "invalid_command")

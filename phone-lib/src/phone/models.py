@@ -10,6 +10,7 @@ from typing import Any
 
 class BatteryHealth(str, Enum):
     """Battery health states from Android."""
+
     UNKNOWN = "Unknown"
     GOOD = "Good"
     OVERHEAT = "Overheat"
@@ -23,6 +24,7 @@ class BatteryHealth(str, Enum):
 
 class BatteryStatus(str, Enum):
     """Battery charging status."""
+
     UNKNOWN = "Unknown"
     CHARGING = "Charging"
     DISCHARGING = "Discharging"
@@ -32,6 +34,7 @@ class BatteryStatus(str, Enum):
 
 class ThermalStatus(str, Enum):
     """Thermal throttling status."""
+
     NORMAL = "Normal"
     THROTTLED = "Throttled"
     SEVERE = "Severe"
@@ -42,6 +45,7 @@ class ThermalStatus(str, Enum):
 
 class LogLevel(str, Enum):
     """Android log levels."""
+
     VERBOSE = "V"
     DEBUG = "D"
     INFO = "I"
@@ -54,6 +58,7 @@ class LogLevel(str, Enum):
 @dataclass(slots=True)
 class BatteryInfo:
     """Battery information from dumpsys battery."""
+
     level: int  # 0-100
     health: BatteryHealth
     status: BatteryStatus
@@ -131,6 +136,7 @@ class BatteryInfo:
 @dataclass(slots=True)
 class StorageInfo:
     """Storage/partition information."""
+
     partition: str
     total_bytes: int
     used_bytes: int
@@ -140,15 +146,15 @@ class StorageInfo:
 
     @property
     def total_gb(self) -> float:
-        return self.total_bytes / (1024 ** 3)
+        return self.total_bytes / (1024**3)
 
     @property
     def used_gb(self) -> float:
-        return self.used_bytes / (1024 ** 3)
+        return self.used_bytes / (1024**3)
 
     @property
     def free_gb(self) -> float:
-        return self.free_bytes / (1024 ** 3)
+        return self.free_bytes / (1024**3)
 
     @property
     def usage_percent(self) -> float:
@@ -160,6 +166,7 @@ class StorageInfo:
 @dataclass(slots=True)
 class DeviceInfo:
     """Device identification and OS info."""
+
     serial: str
     model: str
     manufacturer: str
@@ -188,6 +195,7 @@ class DeviceInfo:
 @dataclass(slots=True)
 class LogEntry:
     """Single logcat entry."""
+
     timestamp: datetime
     pid: int
     tid: int
@@ -201,6 +209,7 @@ class LogEntry:
     def parse_brief(cls, line: str) -> LogEntry | None:
         """Parse brief format: D/Tag(1234): message"""
         import re
+
         # Format: V/D/I/W/E/F/Tag(pid): message
         match = re.match(r"^([VDIWEFS])/(.+?)\((\d+)\):\s*(.*)$", line.strip())
         if not match:
@@ -224,10 +233,11 @@ class LogEntry:
     def parse_threadtime(cls, line: str) -> LogEntry | None:
         """Parse threadtime format: MM-DD HH:MM:SS.mmm PID TID LEVEL Tag: message"""
         import re
+
         # 11-01 01:37:50.214  1141  1149 E HeatmapThread: message
         match = re.match(
             r"^(\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3})\s+(\d+)\s+(\d+)\s+([VDIWEFS])\s+(.+?):\s*(.*)$",
-            line.strip()
+            line.strip(),
         )
         if not match:
             return None
@@ -254,6 +264,7 @@ class LogEntry:
 @dataclass(slots=True)
 class NetworkInfo:
     """Network connectivity information."""
+
     wifi_connected: bool
     wifi_ssid: str | None = None
     wifi_ip: str | None = None
@@ -289,6 +300,7 @@ class NetworkInfo:
 @dataclass(slots=True)
 class ThermalZone:
     """Thermal zone temperature."""
+
     name: str
     temp_c: float  # millicelsius from sysfs
     type: str | None = None
@@ -301,6 +313,7 @@ class ThermalZone:
 @dataclass(slots=True)
 class ThermalInfo:
     """Thermal throttling information."""
+
     zones: list[ThermalZone] = field(default_factory=list)
     cpu_throttled: bool = False
     gpu_throttled: bool = False
@@ -315,6 +328,7 @@ class ThermalInfo:
 @dataclass(slots=True)
 class AppInfo:
     """Application package information."""
+
     package_name: str
     version_name: str | None = None
     version_code: int | None = None
@@ -348,10 +362,11 @@ class AppInfo:
 @dataclass(slots=True)
 class RootInfo:
     """Root/Magisk state reported by the device."""
+
     rooted: bool = False
     magisk_version: str | None = None
     denylist_enabled: bool = False
-    knox_status: str = "unknown"   # unknown | intact | tripped
+    knox_status: str = "unknown"  # unknown | intact | tripped
     su_path: str | None = None
     modules_dir_present: bool = False
 
@@ -371,6 +386,7 @@ class RootInfo:
 @dataclass(slots=True)
 class CpuInfo:
     """CPU information."""
+
     cores: int
     architecture: str
     governors: list[str] = field(default_factory=list)
@@ -382,6 +398,7 @@ class CpuInfo:
 @dataclass(slots=True)
 class MemoryInfo:
     """Memory information."""
+
     total_kb: int
     free_kb: int
     available_kb: int
@@ -408,6 +425,7 @@ class MemoryInfo:
 @dataclass(slots=True)
 class HealthReport:
     """Complete device health report."""
+
     timestamp: datetime = field(default_factory=datetime.now)
     device: DeviceInfo | None = None
     battery: BatteryInfo | None = None
@@ -427,6 +445,7 @@ class HealthReport:
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         from dataclasses import asdict
+
         return asdict(self)
 
     @property

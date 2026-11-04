@@ -10,6 +10,7 @@ from .models import StorageInfo
 
 class StorageUsage(TypedDict):
     """Storage usage information."""
+
     total: int
     used: int
     free: int
@@ -141,9 +142,20 @@ class StorageModule:
         min_bytes = min_size_mb * 1024 * 1024
         try:
             output = self.client.execute(
-                "shell", "find", path, "-type", "f", "-size", f"+{min_bytes}c",
-                "-exec", "ls", "-la", "{}", ";", "2>/dev/null",
-                timeout=60.0
+                "shell",
+                "find",
+                path,
+                "-type",
+                "f",
+                "-size",
+                f"+{min_bytes}c",
+                "-exec",
+                "ls",
+                "-la",
+                "{}",
+                ";",
+                "2>/dev/null",
+                timeout=60.0,
             )
         except Exception:
             return []

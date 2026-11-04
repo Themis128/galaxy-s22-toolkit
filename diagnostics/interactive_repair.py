@@ -20,10 +20,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "phone-lib" / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "diagnostics"))
 
+from run_diagnostics import DiagnosticsRunner  # noqa: E402
+
 from phone import create_client  # noqa: E402
 from phone.notify import DesktopNotifier  # noqa: E402
-from phone.repair import RepairModule, RepairAction, RepairResult  # noqa: E402
-from run_diagnostics import DiagnosticsRunner  # noqa: E402
+from phone.repair import RepairAction, RepairModule, RepairResult  # noqa: E402
 
 
 def _load_yaml_config(config_path: Path) -> dict[str, Any]:
@@ -60,17 +61,21 @@ class InteractiveRepairCLI:
     async def initialize(self) -> bool:
         """Initialize ADB client and repair module."""
         try:
-            device_cfg = (self.config.get("device") or {})
+            device_cfg = self.config.get("device") or {}
             wireless = device_cfg.get("wireless_adb") or None
             if wireless:
                 wireless = {**wireless, "preferred_serial": device_cfg.get("serial")}
             self.client = create_client(wireless=wireless)
             if not self.client.is_connected:
-                print("❌ No ADB device connected. Please connect your device and enable USB debugging.")
+                print(
+                    "❌ No ADB device connected. Please connect your device and enable USB debugging."
+                )
                 return False
 
             device_info = self.client.device.get_device_info()
-            print(f"✅ Connected to {device_info.model} (Android {device_info.android_version}, API {device_info.api_level})")
+            print(
+                f"✅ Connected to {device_info.model} (Android {device_info.android_version}, API {device_info.api_level})"
+            )
 
             # Desktop toast notifications (optional; console fallback below)
             if self.desktop_notifications:
@@ -107,29 +112,33 @@ class InteractiveRepairCLI:
                     f"{action.description}\nRisk: {action.risk_level.upper()}",
                     timeout_s=self.approval_timeout_s,
                 )
-                print(f"{'✅' if approved else '🚫'} {action.name} {'approved' if approved else 'denied'} via desktop notification")
+                print(
+                    f"{'✅' if approved else '🚫'} {action.name} {'approved' if approved else 'denied'} via desktop notification"
+                )
                 return approved
             except Exception:
                 pass  # fall back to console prompt
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"🔧 Repair Action: {action.name}")
         print(f"   Description: {action.description}")
-        print(f"   Category: {action.category} | Risk: {action.risk_level.upper()} | Est. Duration: {action.estimated_duration_s}s")
-        print(f"{'='*60}")
+        print(
+            f"   Category: {action.category} | Risk: {action.risk_level.upper()} | Est. Duration: {action.estimated_duration_s}s"
+        )
+        print(f"{'=' * 60}")
 
         while True:
             response = input("Approve this action? [y/N/a=approve all/q=quit]: ").strip().lower()
-            if response in ('y', 'yes'):
+            if response in ("y", "yes"):
                 return True
-            elif response in ('n', 'no', ''):
+            elif response in ("n", "no", ""):
                 return False
-            elif response in ('a', 'all'):
+            elif response in ("a", "all"):
                 # Approve all remaining pending actions
                 for a in self.pending_actions:
                     a.auto_approve = True
                 return True
-            elif response in ('q', 'quit'):
+            elif response in ("q", "quit"):
                 print("🛑 Quitting...")
                 sys.exit(0)
             else:
@@ -147,15 +156,21 @@ class InteractiveRepairCLI:
         warnings = sum(1 for r in self.diagnostics_results if r.get("status") == "warning")
         failed = sum(1 for r in self.diagnostics_results if r.get("status") in ("fail", "error"))
 
-        print(f"\n📈 Diagnostics Complete: {passed} passed, {warnings} warnings, {failed} failed (exit code: {exit_code})")
+        print(
+            f"\n📈 Diagnostics Complete: {passed} passed, {warnings} warnings, {failed} failed (exit code: {exit_code})"
+        )
 
         # Show issues
-        issues = [r for r in self.diagnostics_results if r.get("status") in ("warning", "fail", "error")]
+        issues = [
+            r for r in self.diagnostics_results if r.get("status") in ("warning", "fail", "error")
+        ]
         if issues:
             print("\n⚠️  Issues Found:")
             for i, issue in enumerate(issues, 1):
                 status_emoji = "❌" if issue.get("status") in ("fail", "error") else "⚠️"
-                print(f"  {i}. {status_emoji} {issue.get('name', 'Unknown')}: {issue.get('message', 'No details')}")
+                print(
+                    f"  {i}. {status_emoji} {issue.get('name', 'Unknown')}: {issue.get('message', 'No details')}"
+                )
         else:
             print("\n✅ No issues found!")
 
@@ -166,7 +181,9 @@ class InteractiveRepairCLI:
         if not self.repair_module:
             return []
 
-        self.pending_actions = await self.repair_module.get_pending_actions(self.diagnostics_results)
+        self.pending_actions = await self.repair_module.get_pending_actions(
+            self.diagnostics_results
+        )
         return self.pending_actions
 
     def display_actions(self, actions: list[RepairAction]) -> None:
@@ -185,11 +202,15 @@ class InteractiveRepairCLI:
 
             print(f"  {i:2d}. {risk_emoji} {action.name}{auto_badge}{root_badge}")
             print(f"      {action.description}")
-            print(f"      Category: {action.category} | Risk: {action.risk_level.upper()} | Est: {action.estimated_duration_s}s")
+            print(
+                f"      Category: {action.category} | Risk: {action.risk_level.upper()} | Est: {action.estimated_duration_s}s"
+            )
 
         print("-" * 80)
 
-    async def run_selected_actions(self, actions: list[RepairAction], indices: list[int]) -> list[RepairResult]:
+    async def run_selected_actions(
+        self, actions: list[RepairAction], indices: list[int]
+    ) -> list[RepairResult]:
         """Run selected repair actions."""
         selected = [actions[i - 1] for i in indices if 1 <= i <= len(actions)]
         if not selected:
@@ -262,18 +283,18 @@ class InteractiveRepairCLI:
 
             choice = input("\nSelect option: ").strip().lower()
 
-            if choice == 'q':
+            if choice == "q":
                 print("👋 Goodbye!")
                 break
-            elif choice == 'r':
+            elif choice == "r":
                 await self.run_diagnostics()
                 actions = await self.get_recommended_actions()
                 self.display_actions(actions)
-            elif choice == 'h':
+            elif choice == "h":
                 self.show_history()
-            elif choice == 'a':
+            elif choice == "a":
                 await self.run_selected_actions(actions, list(range(1, len(actions) + 1)))
-            elif choice == 'c':
+            elif choice == "c":
                 auto_actions = [a for a in actions if a.auto_approve]
                 if auto_actions:
                     indices = [actions.index(a) + 1 for a in auto_actions]

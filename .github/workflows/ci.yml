@@ -16,13 +16,13 @@ jobs:
     name: Lint & Type Check
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: |
           uv pip install --system ruff mypy pytest pytest-asyncio
@@ -38,13 +38,13 @@ jobs:
     name: Unit Tests
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: |
           uv pip install --system pytest pytest-asyncio pytest-mock
@@ -59,19 +59,19 @@ jobs:
     runs-on: windows-latest
     needs: [lint-and-type, unit-tests]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v7
       - name: Build wheel
         run: |
           uv pip install --system build
           cd phone-lib && python -m build --wheel
       - name: Upload wheel artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: phone-lib-wheel
           path: phone-lib/dist/*.whl
@@ -86,7 +86,7 @@ jobs:
       id-token: write  # For trusted publishing
     steps:
       - name: Download wheel
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: phone-lib-wheel
           path: dist

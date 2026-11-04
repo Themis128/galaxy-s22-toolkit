@@ -14,6 +14,7 @@ from phone.models import LogEntry, LogLevel
 @dataclass
 class MockAdbResponse:
     """Mock ADB command response."""
+
     stdout: str = ""
     stderr: str = ""
     returncode: int = 0
@@ -30,7 +31,7 @@ def create_mock_log_entries() -> list[LogEntry]:
             level=LogLevel.DEBUG,
             tag="MainActivity",
             message="onCreate called",
-            raw="11-01 14:32:45.123  1234  1234 D MainActivity: onCreate called"
+            raw="11-01 14:32:45.123  1234  1234 D MainActivity: onCreate called",
         ),
         LogEntry(
             timestamp=datetime(2024, 11, 1, 14, 32, 45, 234000),
@@ -39,7 +40,7 @@ def create_mock_log_entries() -> list[LogEntry]:
             level=LogLevel.INFO,
             tag="System.out",
             message="Debug message",
-            raw="11-01 14:32:45.234  1234  1235 I System.out: Debug message"
+            raw="11-01 14:32:45.234  1234  1235 I System.out: Debug message",
         ),
         LogEntry(
             timestamp=datetime(2024, 11, 1, 14, 32, 45, 345000),
@@ -48,7 +49,7 @@ def create_mock_log_entries() -> list[LogEntry]:
             level=LogLevel.WARN,
             tag="NetworkManager",
             message="Connection timeout",
-            raw="11-01 14:32:45.345  1234  1236 W NetworkManager: Connection timeout"
+            raw="11-01 14:32:45.345  1234  1236 W NetworkManager: Connection timeout",
         ),
         LogEntry(
             timestamp=datetime(2024, 11, 1, 14, 32, 45, 456000),
@@ -57,7 +58,7 @@ def create_mock_log_entries() -> list[LogEntry]:
             level=LogLevel.ERROR,
             tag="DatabaseHelper",
             message="Failed to open database",
-            raw="11-01 14:32:45.456  1234  1237 E DatabaseHelper: Failed to open database"
+            raw="11-01 14:32:45.456  1234  1237 E DatabaseHelper: Failed to open database",
         ),
         LogEntry(
             timestamp=datetime(2024, 11, 1, 14, 32, 45, 567000),
@@ -66,7 +67,7 @@ def create_mock_log_entries() -> list[LogEntry]:
             level=LogLevel.ERROR,
             tag="AndroidRuntime",
             message="FATAL EXCEPTION: main",
-            raw="11-01 14:32:45.567  5678  5678 E AndroidRuntime: FATAL EXCEPTION: main"
+            raw="11-01 14:32:45.567  5678  5678 E AndroidRuntime: FATAL EXCEPTION: main",
         ),
         LogEntry(
             timestamp=datetime(2024, 11, 1, 14, 32, 45, 567000),
@@ -75,7 +76,7 @@ def create_mock_log_entries() -> list[LogEntry]:
             level=LogLevel.ERROR,
             tag="AndroidRuntime",
             message="java.lang.NullPointerException",
-            raw="11-01 14:32:45.567  5678  5678 E AndroidRuntime: java.lang.NullPointerException"
+            raw="11-01 14:32:45.567  5678  5678 E AndroidRuntime: java.lang.NullPointerException",
         ),
         LogEntry(
             timestamp=datetime(2024, 11, 1, 14, 32, 45, 567000),
@@ -84,7 +85,7 @@ def create_mock_log_entries() -> list[LogEntry]:
             level=LogLevel.ERROR,
             tag="AndroidRuntime",
             message="    at com.example.app.MainActivity.onCreate(MainActivity.java:42)",
-            raw="11-01 14:32:45.567  5678  5678 E AndroidRuntime:     at com.example.app.MainActivity.onCreate(MainActivity.java:42)"
+            raw="11-01 14:32:45.567  5678  5678 E AndroidRuntime:     at com.example.app.MainActivity.onCreate(MainActivity.java:42)",
         ),
         LogEntry(
             timestamp=datetime(2024, 11, 1, 14, 32, 45, 678000),
@@ -93,7 +94,7 @@ def create_mock_log_entries() -> list[LogEntry]:
             level=LogLevel.INFO,
             tag="ActivityManager",
             message="Killing 5678:com.example.app/u0a123",
-            raw="11-01 14:32:45.678  1234  1238 I ActivityManager: Killing 5678:com.example.app/u0a123"
+            raw="11-01 14:32:45.678  1234  1238 I ActivityManager: Killing 5678:com.example.app/u0a123",
         ),
         LogEntry(
             timestamp=datetime(2024, 11, 1, 14, 32, 46, 123000),
@@ -102,7 +103,7 @@ def create_mock_log_entries() -> list[LogEntry]:
             level=LogLevel.WARN,
             tag="ActivityManager",
             message="ANR in com.example.app",
-            raw="11-01 14:32:46.123  1234  1239 W ActivityManager: ANR in com.example.app"
+            raw="11-01 14:32:46.123  1234  1239 W ActivityManager: ANR in com.example.app",
         ),
         LogEntry(
             timestamp=datetime(2024, 11, 1, 14, 32, 46, 234000),
@@ -111,7 +112,7 @@ def create_mock_log_entries() -> list[LogEntry]:
             level=LogLevel.ERROR,
             tag="PackageManager",
             message="Permission denied for package com.example.app",
-            raw="11-01 14:32:46.234  1234  1240 E PackageManager: Permission denied for package com.example.app"
+            raw="11-01 14:32:46.234  1234  1240 E PackageManager: Permission denied for package com.example.app",
         ),
     ]
 
@@ -143,7 +144,11 @@ def mock_adb_client() -> MagicMock:
         ("shell", "cat", "/sys/class/thermal/thermal_zone2/type"): "gpu\n",
         ("shell", "cat", "/sys/class/thermal/thermal_zone3/type"): "battery\n",
         ("shell", "cat", "/sys/class/thermal/thermal_zone4/type"): "skin\n",
-        ("shell", "ls", "/sys/class/thermal/"): "thermal_zone0\nthermal_zone1\nthermal_zone2\nthermal_zone3\nthermal_zone4\n",
+        (
+            "shell",
+            "ls",
+            "/sys/class/thermal/",
+        ): "thermal_zone0\nthermal_zone1\nthermal_zone2\nthermal_zone3\nthermal_zone4\n",
         ("shell", "ls", "/sys/devices/virtual/thermal/"): "",
         ("shell", "logcat", "-d", "-v", "threadtime"): MOCK_LOGCAT_THREADTIME,
         ("logcat", "-v", "threadtime", "-t", "10", "*:V"): MOCK_LOGCAT_THREADTIME,
@@ -173,13 +178,33 @@ W/Tag3(300): Warning message
         ("shell", "which", "su"): "",
         ("shell", "ls", "/system/xbin/su"): "No such file or directory\n",
         ("shell", "ip", "addr", "show", "wlan0"): "inet 192.168.1.100/24\n",
-        ("shell", "ping", "-c", "3", "-W", "5", "8.8.8.8"): "PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.\n64 bytes from 8.8.8.8: icmp_seq=1 ttl=117 time=25.4 ms\n64 bytes from 8.8.8.8: icmp_seq=2 ttl=117 time=24.8 ms\n64 bytes from 8.8.8.8: icmp_seq=3 ttl=117 time=26.1 ms\n--- 8.8.8.8 ping statistics---\n3 packets transmitted, 3 received, 0% packet loss, time 2003ms\n",
-        ("shell", "cat", "/proc/net/route"): "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\nwlan0\t00000000\t0101A8C0\t0003\t0\t0\t0\t00000000\t0\t0\t0\n",
-        ("shell", "cat", "/proc/net/dev"): "Inter-|   Receive                                                |  Transmit\n face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed\n  wlan0: 1000000   5000    0    0    0     0          0         0  2000000   6000    0    0    0     0       0          0\n",
+        (
+            "shell",
+            "ping",
+            "-c",
+            "3",
+            "-W",
+            "5",
+            "8.8.8.8",
+        ): "PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.\n64 bytes from 8.8.8.8: icmp_seq=1 ttl=117 time=25.4 ms\n64 bytes from 8.8.8.8: icmp_seq=2 ttl=117 time=24.8 ms\n64 bytes from 8.8.8.8: icmp_seq=3 ttl=117 time=26.1 ms\n--- 8.8.8.8 ping statistics---\n3 packets transmitted, 3 received, 0% packet loss, time 2003ms\n",
+        (
+            "shell",
+            "cat",
+            "/proc/net/route",
+        ): "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\nwlan0\t00000000\t0101A8C0\t0003\t0\t0\t0\t00000000\t0\t0\t0\n",
+        (
+            "shell",
+            "cat",
+            "/proc/net/dev",
+        ): "Inter-|   Receive                                                |  Transmit\n face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed\n  wlan0: 1000000   5000    0    0    0     0          0         0  2000000   6000    0    0    0     0       0          0\n",
         ("shell", "getprop", "ro.build.version.security_patch"): "2024-01-01\n",
         ("shell", "getprop", "ro.build.version.release"): "14\n",
         ("shell", "getprop", "ro.build.version.sdk"): "34\n",
-        ("shell", "getprop", "ro.build.fingerprint"): "samsung/o2sxxx/o2s:14/UP1A.231005.007/S906BXXU2BWK1:user/release-keys\n",
+        (
+            "shell",
+            "getprop",
+            "ro.build.fingerprint",
+        ): "samsung/o2sxxx/o2s:14/UP1A.231005.007/S906BXXU2BWK1:user/release-keys\n",
         ("shell", "getprop", "ro.product.model"): "SM-S906B\n",
         ("shell", "dumpsys", "telephony.registry"): "mDataConnectionState=2\n",
         ("shell", "getprop", "net.dns1"): "192.168.1.1\n",
@@ -191,7 +216,18 @@ W/Tag3(300): Warning message
         ("shell", "cat", "/sys/class/net/wlan0/statistics/tx_bytes"): "2000000\n",
         ("shell", "timeout", "3", "nc", "-z", "-w", "3", "8.8.8.8", "53"): "succeeded!\n",
         ("shell", "nslookup", "google.com"): "Name: google.com\nAddress: 142.250.190.46\n",
-        ("shell", "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "5", "http://www.google.com"): "200\n",
+        (
+            "shell",
+            "curl",
+            "-s",
+            "-o",
+            "/dev/null",
+            "-w",
+            "%{http_code}",
+            "--max-time",
+            "5",
+            "http://www.google.com",
+        ): "200\n",
         ("shell", "echo test"): "test\n",
         ("shell", "echo", "test"): "test\n",
         ("shell", "getprop", "gsm.network.type"): "LTE\n",
@@ -199,7 +235,16 @@ W/Tag3(300): Warning message
         ("shell", "ip", "addr", "show", "rmnet1"): "",
         ("shell", "ip", "addr", "show", "rmnet_data0"): "",
         ("shell", "ip", "addr", "show", "ccmni0"): "",
-        ("shell", "dumpsys", "wifi", "|", "grep", "-A", "20", "ScanResult"): """ScanResult[0]: BSSID: aa:bb:cc:dd:ee:ff SSID: "MyWiFiNetwork" freq: 2437 level: -45 timestamp: 123456789 distanceCm: -1 distanceSdCm: -1 venAnpi: 0 venMcs: 0 venNss: 0 venRxStreams: 0 venTxStreams: 0
+        (
+            "shell",
+            "dumpsys",
+            "wifi",
+            "|",
+            "grep",
+            "-A",
+            "20",
+            "ScanResult",
+        ): """ScanResult[0]: BSSID: aa:bb:cc:dd:ee:ff SSID: "MyWiFiNetwork" freq: 2437 level: -45 timestamp: 123456789 distanceCm: -1 distanceSdCm: -1 venAnpi: 0 venMcs: 0 venNss: 0 venRxStreams: 0 venTxStreams: 0
 ScanResult[1]: BSSID: 11:22:33:44:55:66 SSID: "OtherNetwork" freq: 5180 level: -65 timestamp: 123456790 distanceCm: -1 distanceSdCm: -1 venAnpi: 0 venMcs: 0 venNss: 0 venRxStreams: 0 venTxStreams: 0
 """,
     }
@@ -256,7 +301,15 @@ ScanResult[1]: BSSID: 11:22:33:44:55:66 SSID: "OtherNetwork" freq: 5180 level: -
     client.shell = MagicMock(side_effect=mock_shell)
 
     # Mock logcat method with proper filtering support
-    def mock_logcat(*filters, format: str = "threadtime", lines: int = 100, pid: int | None = None, clear: bool = False, tag: str | None = None, **kwargs):
+    def mock_logcat(
+        *filters,
+        format: str = "threadtime",
+        lines: int = 100,
+        pid: int | None = None,
+        clear: bool = False,
+        tag: str | None = None,
+        **kwargs,
+    ):
         """Mock logcat that supports filtering."""
         if clear:
             return []  # Actual implementation returns empty list
@@ -267,9 +320,12 @@ ScanResult[1]: BSSID: 11:22:33:44:55:66 SSID: "OtherNetwork" freq: 5180 level: -
         if isinstance(rv, str) and rv != "":
             # Parse the string logcat output
             from phone.logcat import LogcatModule
+
             module = LogcatModule(client)
             all_entries = module._parse_logcat_output(rv, format=format)
-        elif hasattr(client, '_logcat_return_value') and isinstance(getattr(client, '_logcat_return_value', None), list):
+        elif hasattr(client, "_logcat_return_value") and isinstance(
+            getattr(client, "_logcat_return_value", None), list
+        ):
             all_entries = client._logcat_return_value
         else:
             all_entries = create_mock_log_entries()
@@ -291,6 +347,7 @@ ScanResult[1]: BSSID: 11:22:33:44:55:66 SSID: "OtherNetwork" freq: 5180 level: -
         # Apply filters with OR logic (entry passes if it matches ANY filter)
         # This matches real logcat behavior
         if filter_list:
+
             def matches_any_filter(entry: LogEntry) -> bool:
                 for f in filter_list:
                     if f.endswith(":E") and entry.level == LogLevel.ERROR:
@@ -306,6 +363,7 @@ ScanResult[1]: BSSID: 11:22:33:44:55:66 SSID: "OtherNetwork" freq: 5180 level: -
                     elif f.endswith(":F") and entry.level == LogLevel.FATAL:
                         return True
                 return False
+
             all_entries = [e for e in all_entries if matches_any_filter(e)]
 
         # Apply PID filter
@@ -316,7 +374,15 @@ ScanResult[1]: BSSID: 11:22:33:44:55:66 SSID: "OtherNetwork" freq: 5180 level: -
         return all_entries[:lines]
 
     # For brief format, we need different mock entries
-    def mock_logcat_brief(*filters, format: str = "threadtime", lines: int = 100, pid: int | None = None, clear: bool = False, tag: str | None = None, **kwargs):
+    def mock_logcat_brief(
+        *filters,
+        format: str = "threadtime",
+        lines: int = 100,
+        pid: int | None = None,
+        clear: bool = False,
+        tag: str | None = None,
+        **kwargs,
+    ):
         """Mock logcat for brief format."""
         if clear:
             return []
@@ -324,18 +390,30 @@ ScanResult[1]: BSSID: 11:22:33:44:55:66 SSID: "OtherNetwork" freq: 5180 level: -
         return [
             LogEntry(
                 timestamp=datetime(2024, 11, 1, 14, 32, 45, 123000),
-                pid=100, tid=100, level=LogLevel.DEBUG, tag="Tag1",
-                message="Message 1", raw="D/Tag1(100): Message 1"
+                pid=100,
+                tid=100,
+                level=LogLevel.DEBUG,
+                tag="Tag1",
+                message="Message 1",
+                raw="D/Tag1(100): Message 1",
             ),
             LogEntry(
                 timestamp=datetime(2024, 11, 1, 14, 32, 45, 234000),
-                pid=200, tid=200, level=LogLevel.ERROR, tag="Tag2",
-                message="Error message", raw="E/Tag2(200): Error message"
+                pid=200,
+                tid=200,
+                level=LogLevel.ERROR,
+                tag="Tag2",
+                message="Error message",
+                raw="E/Tag2(200): Error message",
             ),
             LogEntry(
                 timestamp=datetime(2024, 11, 1, 14, 32, 45, 345000),
-                pid=300, tid=300, level=LogLevel.WARN, tag="Tag3",
-                message="Warning message", raw="W/Tag3(300): Warning message"
+                pid=300,
+                tid=300,
+                level=LogLevel.WARN,
+                tag="Tag3",
+                message="Warning message",
+                raw="W/Tag3(300): Warning message",
             ),
         ][:lines]
 
@@ -694,6 +772,7 @@ MOCK_PIDOF = """1234
 
 MOCK_PM_PATH = """package:/data/app/~~abc123==/com.example.app-efg456==/base.apk
 """
+
 
 # Additional mock data for specific tests
 @pytest.fixture

@@ -41,7 +41,11 @@ class TestThermalModule:
         """Test thermal status when critical temperature reached."""
         # Override thermal zone 3 to be critical (>50C)
         mock_adb_client.execute.side_effect = lambda *args, **kwargs: {
-            ("shell", "ls", "/sys/class/thermal/"): "thermal_zone0\nthermal_zone1\nthermal_zone2\nthermal_zone3\nthermal_zone4\n",
+            (
+                "shell",
+                "ls",
+                "/sys/class/thermal/",
+            ): "thermal_zone0\nthermal_zone1\nthermal_zone2\nthermal_zone3\nthermal_zone4\n",
             ("shell", "ls", "/sys/devices/virtual/thermal/"): "",
             ("shell", "cat", "/sys/class/thermal/thermal_zone0/temp"): "35000\n",
             ("shell", "cat", "/sys/class/thermal/thermal_zone1/temp"): "36000\n",

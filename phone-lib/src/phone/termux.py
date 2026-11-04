@@ -286,7 +286,9 @@ class TermuxBootManager:
         """List all boot scripts."""
         if not os.path.exists(cls.BOOT_DIR):
             return []
-        return [f for f in os.listdir(cls.BOOT_DIR) if os.access(os.path.join(cls.BOOT_DIR, f), os.X_OK)]
+        return [
+            f for f in os.listdir(cls.BOOT_DIR) if os.access(os.path.join(cls.BOOT_DIR, f), os.X_OK)
+        ]
 
     @classmethod
     def remove_script(cls, name: str) -> bool:

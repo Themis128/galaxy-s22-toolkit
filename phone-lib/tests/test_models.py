@@ -288,6 +288,7 @@ class TestMemoryInfo:
 
     def test_memory_info_creation(self):
         from phone.models import MemoryInfo
+
         memory = MemoryInfo(
             total_kb=8_000_000,
             free_kb=2_000_000,
@@ -301,6 +302,7 @@ class TestMemoryInfo:
 
     def test_usage_percent(self):
         from phone.models import MemoryInfo
+
         memory = MemoryInfo(
             total_kb=1000,
             free_kb=200,

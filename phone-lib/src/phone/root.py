@@ -43,7 +43,10 @@ class RootModule:
             m = re.search(r"MAGISK_MAIN_VERSION[:=]?\s*([\w.]+)", ver)
             info.magisk_version = m.group(1) if m else (ver.strip() or None)
 
-            deny = self.client.execute("shell", "su -c magisk --sqlite \"SELECT value FROM settings WHERE key='denylist'\" 2>/dev/null")
+            deny = self.client.execute(
+                "shell",
+                "su -c magisk --sqlite \"SELECT value FROM settings WHERE key='denylist'\" 2>/dev/null",
+            )
             info.denylist_enabled = deny.strip().endswith("1")
 
             modules = self.client.execute("shell", "su -c ls /data/adb/modules 2>/dev/null")
@@ -72,7 +75,9 @@ class RootModule:
             info.knox_status = "intact"
         return info
 
-    def run_privileged(self, command: str, confirm: bool = False, timeout: float | None = None) -> str:
+    def run_privileged(
+        self, command: str, confirm: bool = False, timeout: float | None = None
+    ) -> str:
         """Run `command` as root via su. Requires confirm=True.
 
         Raises:
@@ -97,13 +102,21 @@ class RootModule:
             if not entry:
                 continue
             module_id = entry.strip("/").split("/")[-1]
-            disabled = self.client.execute("shell", f"su -c test -f /data/adb/modules/{module_id}/disable && echo yes || echo no").strip()
-            remove = self.client.execute("shell", f"su -c test -f /data/adb/modules/{module_id}/remove && echo yes || echo no").strip()
-            modules.append({
-                "id": module_id,
-                "disabled": disabled == "yes",
-                "pending_removal": remove == "yes",
-            })
+            disabled = self.client.execute(
+                "shell",
+                f"su -c test -f /data/adb/modules/{module_id}/disable && echo yes || echo no",
+            ).strip()
+            remove = self.client.execute(
+                "shell",
+                f"su -c test -f /data/adb/modules/{module_id}/remove && echo yes || echo no",
+            ).strip()
+            modules.append(
+                {
+                    "id": module_id,
+                    "disabled": disabled == "yes",
+                    "pending_removal": remove == "yes",
+                }
+            )
         return modules
 
     def set_module_state(self, module_id: str, action: str, confirm: bool = False) -> bool:

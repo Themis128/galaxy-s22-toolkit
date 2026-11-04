@@ -31,6 +31,5 @@ def confined_path(root: str | Path, candidate: str | Path) -> Path:
         return candidate_resolved
 
     raise PathEscapeError(
-        f"Path {str(candidate)!r} resolves outside allowed root "
-        f"{str(root_resolved)!r}"
+        f"Path {str(candidate)!r} resolves outside allowed root {str(root_resolved)!r}"
     )

@@ -103,12 +103,16 @@ class ThermalModule:
         """Read a single thermal zone's temperature and type."""
         try:
             # Read temperature (in millicelsius)
-            temp_output = self.client.execute("shell", "cat", f"/sys/class/thermal/{zone_path}/temp")
+            temp_output = self.client.execute(
+                "shell", "cat", f"/sys/class/thermal/{zone_path}/temp"
+            )
             temp_mc = int(temp_output.strip())
             temp_c = temp_mc / 1000.0
 
             # Read type
-            type_output = self.client.execute("shell", "cat", f"/sys/class/thermal/{zone_path}/type")
+            type_output = self.client.execute(
+                "shell", "cat", f"/sys/class/thermal/{zone_path}/type"
+            )
             zone_type = type_output.strip()
 
             return ThermalZone(
@@ -220,10 +224,7 @@ class ThermalModule:
             "gpu_throttled": info.gpu_throttled,
             "status": info.status.value,
             "max_temp_c": max((z.temp_c for z in info.zones), default=0),
-            "zones": [
-                {"name": z.name, "temp_c": z.temp_c, "type": z.type}
-                for z in info.zones
-            ],
+            "zones": [{"name": z.name, "temp_c": z.temp_c, "type": z.type} for z in info.zones],
         }
 
     def monitor_thermal(
