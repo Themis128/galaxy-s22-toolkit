@@ -45,11 +45,74 @@ def latest_backup(directory: Path) -> Path | None:
     return files[-1] if files else None
 
 
+def restore(db_file: Path) -> int:
+    """Restore a backup into the metrics-data volume, safely.
+
+    Order matters: stop the app FIRST, replace the file, then remove the
+    stale WAL/SHM sidecars (a fresh DB's WAL reapplied over a restored
+    file silently drops rows - verified in the first recovery drill),
+    then start again.
+    """
+    if not db_file.exists():
+        print(f"backup not found: {db_file}", file=sys.stderr)
+        return 1
+
+    def run(cmd: list[str]) -> bool:
+        r = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True)
+        ok = r.returncode == 0
+        if not ok:
+            print(f"  failed: {' '.join(cmd)}: {r.stderr.strip()}", file=sys.stderr)
+        return ok
+
+    if not run(["docker", "compose", "stop", "dashboard"]):
+        return 1
+    if not run(
+        [
+            "docker",
+            "compose",
+            "cp",
+            str(db_file),
+            "dashboard:/app/dashboard/data/metrics.db",
+        ]
+    ):
+        return 1
+    # exec needs a running container; use a one-off on the volume instead
+    if not run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "-v",
+            "galaxys222_metrics-data:/data",
+            "python:3.12-slim",
+            "sh",
+            "-c",
+            "rm -f /data/metrics.db-wal /data/metrics.db-shm",
+        ]
+    ):
+        return 1
+    if not run(["docker", "compose", "start", "dashboard"]):
+        return 1
+    print(f"restored {db_file.name} into the metrics-data volume")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--keep", type=int, default=14, help="snapshots to keep")
     parser.add_argument("--check", action="store_true", help="report age only")
+    parser.add_argument(
+        "--restore",
+        metavar="FILE",
+        help="restore a backup into the volume: stops the dashboard, "
+        "replaces metrics.db, removes stale WAL sidecars (a fresh DB's "
+        "WAL reapplied over a restored file drops rows - drill-verified), "
+        "and restarts",
+    )
     args = parser.parse_args(argv)
+
+    if args.restore:
+        return restore(Path(args.restore))
 
     latest = latest_backup(BACKUP_DIR)
     if args.check:
