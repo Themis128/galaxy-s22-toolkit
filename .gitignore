@@ -78,3 +78,9 @@ micro1-interview-prep.html
 /*.lnk
 .zcode/skkills/
 .zcode/plans/
+
+# --- Databases (runtime-generated, never commit) ---
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
