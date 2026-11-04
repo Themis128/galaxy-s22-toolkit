@@ -406,6 +406,35 @@
                 </div>
             </div>
 
+            <!-- Historical Trends Card -->
+            <div class="card">
+                <div class="card-header">📈 Historical Trends</div>
+                <div class="card-body">
+                    <div class="controls" style="gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                        <select id="trend-metric" class="btn" style="flex: 1 1 auto; min-width: 200px; padding: 0.5rem; background: white; color: #333; border: 1px solid #ddd; border-radius: 8px;">
+                            <option value="">Select a metric...</option>
+                        </select>
+                        <select id="trend-range" class="btn" style="flex: 0 0 auto; min-width: 140px; padding: 0.5rem; background: white; color: #333; border: 1px solid #ddd; border-radius: 8px;">
+                            <option value="24">Last 24 hours</option>
+                            <option value="168">Last 7 days</option>
+                            <option value="720">Last 30 days</option>
+                        </select>
+                        <select id="trend-granularity" class="btn" style="flex: 0 0 auto; min-width: 140px; padding: 0.5rem; background: white; color: #333; border: 1px solid #ddd; border-radius: 8px;">
+                            <option value="hourly">Hourly averages</option>
+                            <option value="daily">Daily averages</option>
+                        </select>
+                        <button class="btn" id="trend-load-btn" onclick="loadTrendData()" style="min-height: 44px;">📊 Load Trend</button>
+                    </div>
+                    <div id="trend-stats" style="display: none; margin-bottom: 1rem; padding: 0.75rem; background: #f8f9fa; border-radius: 8px; font-size: 0.85rem;"></div>
+                    <div class="chart-container" style="height: 250px;">
+                        <canvas id="trend-chart"></canvas>
+                    </div>
+                    <div id="trend-empty" style="display: none; text-align: center; padding: 2rem; color: #999;">
+                        Select a metric and click "Load Trend" to view historical data
+                    </div>
+                </div>
+            </div>
+
             <!-- Repair Card -->
             <div class="card">
                 <div class="card-header">🔧 Auto-Repair</div>
@@ -429,6 +458,8 @@
     <script>
         // Chart instances
         let charts = {};
+        let trendChart = null;
+        let availableMetrics = [];
         
         // WebSocket connection
         let ws = null;
@@ -1042,12 +1073,166 @@
                 console.error('Failed to load repair history:', error);
             }
         }
+
+        // ===== Historical Trends Functions =====
+        
+        async function loadAvailableMetrics() {
+            try {
+                const response = await fetch('/api/trends/metrics?hours=720'); // 30 days
+                const data = await response.json();
+                availableMetrics = data.metrics || [];
+                
+                const select = document.getElementById('trend-metric');
+                select.innerHTML = '<option value="">Select a metric...</option>';
+                
+                availableMetrics.forEach(metric => {
+                    const option = document.createElement('option');
+                    option.value = metric;
+                    // Make metric path more readable
+                    option.textContent = metric.replace(/\./g, ' → ');
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Failed to load available metrics:', error);
+            }
+        }
+
+        async function loadTrendData() {
+            const metric = document.getElementById('trend-metric').value;
+            const hours = parseInt(document.getElementById('trend-range').value);
+            const granularity = document.getElementById('trend-granularity').value;
+            
+            if (!metric) {
+                alert('Please select a metric first');
+                return;
+            }
+            
+            const chartContainer = document.getElementById('trend-chart');
+            const emptyMsg = document.getElementById('trend-empty');
+            const statsDiv = document.getElementById('trend-stats');
+            const loadBtn = document.getElementById('trend-load-btn');
+            
+            loadBtn.disabled = true;
+            loadBtn.textContent = '⏳ Loading...';
+            chartContainer.style.display = 'none';
+            emptyMsg.style.display = 'none';
+            statsDiv.style.display = 'none';
+            
+            try {
+                // Load stats
+                const statsResponse = await fetch(`/api/trends/stats/${encodeURIComponent(metric)}?hours=${hours}`);
+                const statsData = await statsResponse.json();
+                
+                if (statsData.stats && statsData.stats.count > 0) {
+                    const s = statsData.stats;
+                    statsDiv.style.display = 'block';
+                    statsDiv.innerHTML = `
+                        <strong>Stats for ${metric.replace(/\./g, ' → ')} (${hours}h):</strong>
+                        <span style="margin-left: 1rem;">Min: ${s.min !== null ? s.min.toFixed(2) : 'N/A'}</span>
+                        <span style="margin-left: 1rem;">Max: ${s.max !== null ? s.max.toFixed(2) : 'N/A'}</span>
+                        <span style="margin-left: 1rem;">Avg: ${s.avg !== null ? s.avg.toFixed(2) : 'N/A'}</span>
+                        <span style="margin-left: 1rem;">Count: ${s.count}</span>
+                    `;
+                }
+                
+                // Load trend data
+                let trendData = [];
+                let labels = [];
+                
+                if (granularity === 'hourly') {
+                    const response = await fetch(`/api/trends/hourly/${encodeURIComponent(metric)}?hours=${hours}`);
+                    const data = await response.json();
+                    trendData = data.data || [];
+                    labels = trendData.map(d => new Date(d.hour_start_utc.replace(' ', 'T') + 'Z'));
+                } else {
+                    const response = await fetch(`/api/trends/daily/${encodeURIComponent(metric)}?days=${Math.ceil(hours/24)}`);
+                    const data = await response.json();
+                    trendData = data.data || [];
+                    labels = trendData.map(d => new Date(d.day_start_utc.replace(' ', 'T') + 'Z'));
+                }
+                
+                // Destroy existing trend chart
+                if (trendChart) {
+                    trendChart.destroy();
+                }
+                
+                if (trendData.length === 0) {
+                    chartContainer.style.display = 'none';
+                    emptyMsg.style.display = 'block';
+                    emptyMsg.textContent = `No ${granularity} data available for ${metric} in the selected range`;
+                } else {
+                    emptyMsg.style.display = 'none';
+                    chartContainer.style.display = 'block';
+                    
+                    const ctx = chartContainer.getContext('2d');
+                    const values = trendData.map(d => d.avg_value);
+                    
+                    trendChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: metric.replace(/\./g, ' → '),
+                                data: values,
+                                borderColor: colors.primary,
+                                backgroundColor: 'rgba(30, 60, 114, 0.1)',
+                                fill: true,
+                                tension: 0.3,
+                                pointRadius: 0,
+                                pointHoverRadius: 4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: { mode: 'index', intersect: false },
+                            plugins: { 
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            return `${metric}: ${context.parsed.y.toFixed(2)}`;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: { 
+                                    type: 'time', 
+                                    time: { 
+                                        unit: granularity === 'hourly' ? 'hour' : 'day',
+                                        displayFormats: { 
+                                            hour: 'MMM d, HH:mm', 
+                                            day: 'MMM d' 
+                                        } 
+                                    }, 
+                                    grid: { color: colors.grid }, 
+                                    ticks: { font: { size: 9 } } 
+                                },
+                                y: { 
+                                    grid: { color: colors.grid }, 
+                                    ticks: { font: { size: 9 } } 
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load trend data:', error);
+                emptyMsg.style.display = 'block';
+                emptyMsg.textContent = `Error loading trend data: ${error.message}`;
+            } finally {
+                loadBtn.disabled = false;
+                loadBtn.textContent = '📊 Load Trend';
+            }
+        }
         
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             initCharts();
             connectWebSocket();
             refreshData(); // Initial load via REST
+            loadAvailableMetrics(); // Populate trend metric dropdown
         });
     </script>
 </body>
