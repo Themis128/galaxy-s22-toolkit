@@ -62,6 +62,22 @@ to the shared repair history the CLI uses.
 `/api/devin/*` requires the `X-API-Key` header (set `GROQ_BOT_API_KEY`;
 optionally restrict callers with `TAILSCALE_ALLOWLIST`).
 
+Connection profile for the bot (verified end-to-end over the tailnet):
+base URL `https://office-1.tail4ecae1.ts.net` (via `tailscale serve`),
+header `X-API-Key: $GROQ_BOT_API_KEY`.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/devin/status` | Devin process + workdir status |
+| `POST /api/devin/execute` | Run a shell command in the workdir (`{"command": "..."}`) |
+| `GET /api/devin/files?path=.` | List workdir entries (response key: `items`) |
+| `GET /api/devin/files/read?path=x` | Read a file |
+| `POST /api/devin/files/write` | Write a file (`{"path": ..., "content": ...}`) |
+| `DELETE /api/devin/files?path=x` | Delete a file |
+
+All paths are confined to the Devin workdir (`DEVIN_WORKDIR`, default
+`~/Devin`).
+
 ## Mobile
 
 The UI is responsive (44px touch targets, single-column layout) for
