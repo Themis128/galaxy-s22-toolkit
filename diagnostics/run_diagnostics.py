@@ -683,33 +683,33 @@ class DiagnosticsRunner:
             self._send_email(report)
     
     def _send_desktop_notification(self, report: HealthReport) -> None:
-        """Send Windows toast notification."""
+        """Send Windows toast notification via phone.notify (windows-toasts)."""
         try:
-            import winrt.windows.ui.notifications as notifications
-            import winrt.windows.data.xml.dom as dom
-            
-            # Create toast XML
-            template = f"""
-            <toast>
-                <visual>
-                    <binding template="ToastGeneric">
-                        <text>Galaxy S22+ Health Check</text>
-                        <text>{report.summary}</text>
-                    </binding>
-                </visual>
-            </toast>
-            """
-            
-            xml_doc = dom.XmlDocument()
-            xml_doc.load_xml(template)
-            toast = notifications.ToastNotification(xml_doc)
-            notifier = notifications.ToastNotificationManager.create_toast_notifier("Galaxy S22+ Diagnostics")
-            notifier.show(toast)
-            
-            self.logger.info("Desktop notification sent")
+            import sys as _sys
+
+            _sys.path.insert(0, str(self.output_root.parent / "phone-lib" / "src"))
+            from phone.notify import DesktopNotifier
+
+            notifier = DesktopNotifier(app_id="Galaxy S22+ Diagnostics")
+            if report.overall_status == "healthy":
+                ok = notifier.notify(
+                    "Galaxy S22+ Health Check", report.summary or "All checks passed"
+                )
+            else:
+                ok = notifier.notify(
+                    f"Galaxy S22+ Health: {report.overall_status.upper()}",
+                    report.summary or "Issues detected - see the report",
+                    long=True,
+                )
+            if ok:
+                self.logger.info("Desktop notification sent")
+            else:
+                self.logger.warning(
+                    "Desktop notification not shown: %s", notifier.last_error
+                )
         except Exception as e:
             self.logger.warning(f"Failed to send desktop notification: {e}")
-    
+
     def _send_webhook(self, report: HealthReport) -> None:
         """Send webhook notification."""
         webhook = self.config.notifications['webhook']

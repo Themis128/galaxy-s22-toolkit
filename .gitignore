@@ -52,6 +52,7 @@ CACHEDIR.TAG
 
 # ...except tracked config XML
 !diagnostics/task_scheduler.xml
+!dashboard/task_dashboard.xml
 
 # --- Secrets & local env ---
 .env

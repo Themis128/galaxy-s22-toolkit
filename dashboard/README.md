@@ -28,6 +28,17 @@ The compose file mounts the host's ADB keys read-only so the phone does
 not need to approve a new key, sets `DASHBOARD_HOST=0.0.0.0` (required
 for published ports), and connects to `PHONE_ADB_HOST:5555` on start.
 
+## Tailnet access (from the phone)
+
+```bash
+tailscale serve --bg 8081     # https://<host>.<tailnet>.ts.net -> 127.0.0.1:8081
+```
+
+On this machine the dashboard also auto-starts hidden at logon via a
+Startup-folder entry (`galaxy_s22_dashboard.vbs`, no admin required),
+so the phone-side URL stays available across reboots. Every scheduled
+diagnostics run fires a desktop toast when it finds issues.
+
 ## Monitoring
 
 - `GET /api/health` — current snapshot (device, battery, storage, network, thermal)
