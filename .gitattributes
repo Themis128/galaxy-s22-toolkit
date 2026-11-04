@@ -1,0 +1,14 @@
+# Normalize line endings: LF everywhere (ruff format uses line-ending = "lf").
+# text=auto lets git skip already-binary files automatically.
+* text=auto eol=lf
+
+# Explicit binaries (defensive; text=auto usually handles these)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.whl binary
+*.gz binary
+*.zip binary
+*.db binary
