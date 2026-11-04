@@ -47,7 +47,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: |
-          uv pip install --system pytest pytest-asyncio pytest-mock httpx pyyaml fastapi
+          uv pip install --system pytest pytest-asyncio pytest-mock httpx pyyaml fastapi jinja2
           cd phone-lib && uv pip install --system -e ".[dev]"
       - name: Run unit tests
         # -m "not device" (marker) instead of -k: -k "not device" also

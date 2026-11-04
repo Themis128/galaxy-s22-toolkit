@@ -1,5 +1,7 @@
 """Endpoint tests for dashboard.app (device-independent routes)."""
 
+import os
+
 
 class TestStaticAndTrends:
     def test_index_serves_html(self, api_client):
@@ -75,7 +77,9 @@ class TestAuth:
         assert r.status_code == 401
 
     def test_devin_status_with_key(self, api_client):
-        r = api_client.get("/api/devin/status", headers={"X-API-Key": "test-key-12345"})
+        # key comes from conftest's env (no hardcoded credentials)
+        key = os.environ["GROQ_BOT_API_KEY"]
+        r = api_client.get("/api/devin/status", headers={"X-API-Key": key})
         # 200 (Devin reachable) or 5xx (Devin CLI not installed in test env)
         assert r.status_code in (200, 500, 502, 503)
 
