@@ -13,6 +13,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+# Repo root must be importable for `from dashboard.metrics_db import ...`
+# when launched as `python dashboard/app.py` (sys.path[0] is dashboard/).
+sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(PROJECT_ROOT / "phone-lib" / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "diagnostics"))
 
