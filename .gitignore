@@ -84,3 +84,6 @@ micro1-interview-prep.html
 *.db-journal
 *.db-wal
 *.db-shm
+
+# --- Metrics DB backups (runtime data) ---
+/backups/

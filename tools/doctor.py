@@ -92,6 +92,18 @@ def check_wsl() -> None:
     )
 
 
+def check_backup() -> None:
+    try:
+        r = subprocess.run(
+            [sys.executable, str(REPO / "tools" / "backup_metrics_db.py"), "--check"],
+            capture_output=True, text=True, timeout=30,
+        )
+        detail = (r.stdout or r.stderr).strip().splitlines()
+        check("metrics-backup", r.returncode == 0, detail[-1] if detail else "no output")
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        check("metrics-backup", False, str(exc))
+
+
 def check_container() -> None:
     try:
         out = subprocess.run(
@@ -115,6 +127,7 @@ def main() -> int:
     check_onedrive()
     check_junk()
     check_hooks()
+    check_backup()
     check_wsl()
     check_container()
     if args.fix:

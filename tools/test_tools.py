@@ -42,6 +42,33 @@ class TestFindArtifacts:
         assert find_artifacts(tmp_path) == []
 
 
+class TestBackupRetention:
+    def _make(self, d, n):
+        for i in range(n):
+            (d / f"metrics-2026110{i}-120000.db").write_text("x", encoding="utf-8")
+
+    def test_prune_keeps_newest(self, tmp_path):
+        from backup_metrics_db import prune_backups
+
+        self._make(tmp_path, 5)
+        removed = prune_backups(tmp_path, keep=3)
+        assert len(removed) == 2
+        assert len(list(tmp_path.glob("metrics-*.db"))) == 3
+
+    def test_prune_keep_all(self, tmp_path):
+        from backup_metrics_db import prune_backups
+
+        self._make(tmp_path, 3)
+        assert prune_backups(tmp_path, keep=10) == []
+
+    def test_latest_backup(self, tmp_path):
+        from backup_metrics_db import latest_backup
+
+        assert latest_backup(tmp_path) is None
+        self._make(tmp_path, 2)
+        assert latest_backup(tmp_path).name == "metrics-20261101-120000.db"
+
+
 class TestFixOnedriveAttrs:
     def test_find_readonly_reports_flagged_file(self, tmp_path):
         import os
