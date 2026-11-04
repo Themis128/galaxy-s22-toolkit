@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -241,7 +242,7 @@ class RepairModule:
     def __init__(
         self,
         client: AdbClient,
-        confirm_callback=None,
+        confirm_callback: Callable[[RepairAction], Awaitable[bool]] | None = None,
         history_path: str | Path | None = None,
         history_max_entries: int = 500,
     ):
@@ -347,7 +348,7 @@ class RepairModule:
         except Exception as exc:
             logger.warning("Could not persist repair history to %s: %s", self.history_path, exc)
 
-    async def get_pending_actions(self, diagnostics_results: list[dict] | None = None) -> list[RepairAction]:
+    async def get_pending_actions(self, diagnostics_results: list[dict[str, Any]] | None = None) -> list[RepairAction]:
         """Get list of recommended repair actions based on diagnostics.
 
         Args:
@@ -363,7 +364,7 @@ class RepairModule:
             return [a for a in self.AVAILABLE_ACTIONS if a.auto_approve]
 
         # Map check names to repair actions
-        check_to_actions = {
+        check_to_actions: dict[str, list[str]] = {
             "storage": [
                 "clear_app_caches",
                 "remove_temp_files",
@@ -421,10 +422,11 @@ class RepairModule:
         Uses confirm_callback if provided, otherwise returns auto_approve flag.
         """
         if self.confirm_callback:
-            return await self.confirm_callback(action)
+            result = await self.confirm_callback(action)
+            return bool(result)
         return action.auto_approve
 
-    async def execute_action(self, action_name: str, **kwargs) -> RepairResult:
+    async def execute_action(self, action_name: str, **kwargs: Any) -> RepairResult:
         """Execute a single repair action by name."""
         action = next((a for a in self.AVAILABLE_ACTIONS if a.name == action_name), None)
         if not action:
@@ -485,7 +487,7 @@ class RepairModule:
             self._persist_result(repair_result)
             return repair_result
 
-    async def execute_multiple(self, action_names: list[str], **kwargs) -> list[RepairResult]:
+    async def execute_multiple(self, action_names: list[str], **kwargs: Any) -> list[RepairResult]:
         """Execute multiple repair actions sequentially."""
         results = []
         for name in action_names:
@@ -498,7 +500,7 @@ class RepairModule:
 
     # ===== Storage Repairs =====
 
-    async def _repair_clear_app_caches(self, **kwargs) -> RepairResult:
+    async def _repair_clear_app_caches(self, **kwargs: Any) -> RepairResult:
         """Clear cached data for all apps via pm trim-caches (no root needed)."""
         action = next(a for a in self.AVAILABLE_ACTIONS if a.name == "clear_app_caches")
         try:
@@ -518,7 +520,7 @@ class RepairModule:
                 message=f"Failed to trim app caches: {e}",
             )
 
-    async def _repair_remove_temp_files(self, **kwargs) -> RepairResult:
+    async def _repair_remove_temp_files(self, **kwargs: Any) -> RepairResult:
         """Remove temporary files from common temp directories."""
         temp_dirs = [
             "/data/local/tmp",
@@ -552,7 +554,7 @@ class RepairModule:
             details={"dirs_cleaned": len(temp_dirs), "estimated_files": total_removed},
         )
 
-    async def _repair_remove_tombstones(self, **kwargs) -> RepairResult:
+    async def _repair_remove_tombstones(self, **kwargs: Any) -> RepairResult:
         """Remove old tombstone crash dumps (requires root)."""
         action = next(a for a in self.AVAILABLE_ACTIONS if a.name == "remove_tombstones")
         try:
@@ -591,7 +593,7 @@ class RepairModule:
                 message=f"Failed to remove tombstones: {e}",
             )
 
-    async def _repair_remove_anr_traces(self, **kwargs) -> RepairResult:
+    async def _repair_remove_anr_traces(self, **kwargs: Any) -> RepairResult:
         """Remove old ANR trace files (requires root)."""
         action = next(a for a in self.AVAILABLE_ACTIONS if a.name == "remove_anr_traces")
         try:
@@ -629,7 +631,7 @@ class RepairModule:
                 message=f"Failed to remove ANR traces: {e}",
             )
 
-    async def _repair_identify_large_files(self, **kwargs) -> RepairResult:
+    async def _repair_identify_large_files(self, **kwargs: Any) -> RepairResult:
         """Find large files for manual review (scans /sdcard; /data needs root)."""
         action = next(a for a in self.AVAILABLE_ACTIONS if a.name == "identify_large_files")
         try:
@@ -662,7 +664,7 @@ class RepairModule:
 
     # ===== App Repairs =====
 
-    async def _repair_force_stop_misbehaving_apps(self, **kwargs) -> RepairResult:
+    async def _repair_force_stop_misbehaving_apps(self, **kwargs: Any) -> RepairResult:
         """Force stop apps with high resource usage or crashes."""
         action = next(a for a in self.AVAILABLE_ACTIONS if a.name == "force_stop_misbehaving_apps")
         stopped = []
@@ -707,7 +709,7 @@ class RepairModule:
             details={"stopped": stopped, "crash_packages": sorted(crash_packages)[:10]},
         )
 
-    async def _repair_clear_app_data(self, **kwargs) -> RepairResult:
+    async def _repair_clear_app_data(self, **kwargs: Any) -> RepairResult:
         """Clear data for specific apps (requires package names in kwargs)."""
         packages = kwargs.get("packages", [])
         if not packages:
@@ -732,7 +734,7 @@ class RepairModule:
             details={"cleared": cleared, "requested": packages},
         )
 
-    async def _repair_disable_bloatware(self, **kwargs) -> RepairResult:
+    async def _repair_disable_bloatware(self, **kwargs: Any) -> RepairResult:
         """Disable common Samsung bloatware."""
         disabled = []
         already_disabled = []
@@ -762,7 +764,7 @@ class RepairModule:
             requires_reboot=False,
         )
 
-    async def _repair_reset_app_preferences(self, **kwargs) -> RepairResult:
+    async def _repair_reset_app_preferences(self, **kwargs: Any) -> RepairResult:
         """Reset runtime permissions to their default (denied) state."""
         action = next(a for a in self.AVAILABLE_ACTIONS if a.name == "reset_app_preferences")
         try:
@@ -783,7 +785,7 @@ class RepairModule:
 
     # ===== Network Repairs =====
 
-    async def _repair_reset_wifi(self, **kwargs) -> RepairResult:
+    async def _repair_reset_wifi(self, **kwargs: Any) -> RepairResult:
         """Toggle Wi-Fi off/on (re-enables even if the toggle half-fails)."""
         action = next(a for a in self.AVAILABLE_ACTIONS if a.name == "reset_wifi")
         try:
@@ -812,7 +814,7 @@ class RepairModule:
                 message=f"Failed to reset Wi-Fi: {e}",
             )
 
-    async def _repair_reset_mobile_data(self, **kwargs) -> RepairResult:
+    async def _repair_reset_mobile_data(self, **kwargs: Any) -> RepairResult:
         """Toggle mobile data off/on (re-enables even if the toggle half-fails)."""
         action = next(a for a in self.AVAILABLE_ACTIONS if a.name == "reset_mobile_data")
         try:
@@ -841,7 +843,7 @@ class RepairModule:
                 message=f"Failed to reset mobile data: {e}",
             )
 
-    async def _repair_toggle_airplane_mode(self, **kwargs) -> RepairResult:
+    async def _repair_toggle_airplane_mode(self, **kwargs: Any) -> RepairResult:
         """Toggle airplane mode."""
         try:
             # Use settings only (broadcast requires system permission on newer Android)
@@ -862,7 +864,7 @@ class RepairModule:
                 message=f"Failed to toggle airplane mode: {e}",
             )
 
-    async def _repair_flush_dns(self, **kwargs) -> RepairResult:
+    async def _repair_flush_dns(self, **kwargs: Any) -> RepairResult:
         """Flush DNS cache."""
         try:
             # Try ndc resolver flushdefaultif (older Android)
@@ -893,7 +895,7 @@ class RepairModule:
                 message=f"Failed to flush DNS: {e}",
             )
 
-    async def _repair_reset_network_settings(self, **kwargs) -> RepairResult:
+    async def _repair_reset_network_settings(self, **kwargs: Any) -> RepairResult:
         """Reset network settings (toggle all radio settings)."""
         try:
             # Reset Wi-Fi
@@ -927,7 +929,7 @@ class RepairModule:
 
     # ===== Logcat Repairs =====
 
-    async def _repair_clear_logcat_buffers(self, **kwargs) -> RepairResult:
+    async def _repair_clear_logcat_buffers(self, **kwargs: Any) -> RepairResult:
         """Clear all logcat buffers."""
         try:
             buffers = ["main", "system", "radio", "events", "crash", "kernel"]
@@ -953,7 +955,7 @@ class RepairModule:
                 message=f"Failed to clear logcat buffers: {e}",
             )
 
-    async def _repair_clear_old_logs(self, **kwargs) -> RepairResult:
+    async def _repair_clear_old_logs(self, **kwargs: Any) -> RepairResult:
         """Remove old log files."""
         try:
             log_dirs = [
@@ -984,7 +986,7 @@ class RepairModule:
                 message=f"Failed to clear old logs: {e}",
             )
 
-    async def _repair_reduce_log_verbosity(self, **kwargs) -> RepairResult:
+    async def _repair_reduce_log_verbosity(self, **kwargs: Any) -> RepairResult:
         """Reduce log verbosity for noisy packages."""
         try:
             # Common noisy Samsung packages
@@ -1020,5 +1022,5 @@ class RepairModule:
 
 
 # Helper for async sleep
-async def asyncio_sleep(seconds: float):
+async def asyncio_sleep(seconds: float) -> None:
     await asyncio.sleep(seconds)

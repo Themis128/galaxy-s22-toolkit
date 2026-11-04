@@ -169,7 +169,7 @@ class DeviceModule:
         """Get CPU information from /proc/cpuinfo."""
         output = self.client.execute("shell", "cat", "/proc/cpuinfo")
         cpus = []
-        current_cpu = {}
+        current_cpu: dict[str, str] = {}
         for line in output.strip().split("\n"):
             line = line.strip()
             if not line:
@@ -284,7 +284,7 @@ class DeviceModule:
 
     def get_wireless_status(self) -> dict[str, Any]:
         """Get current wireless ADB status."""
-        result = {
+        result: dict[str, Any] = {
             "tcp_port": None,
             "wifi_ip": self.get_wifi_ip(),
             "connected_devices": [],

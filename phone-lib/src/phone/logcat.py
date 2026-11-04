@@ -456,7 +456,7 @@ class LogcatModule:
         *filters: str,
         format: str = "threadtime",
         pid: int | None = None,
-    ):
+    ) -> Any:
         """Stream logcat lines as a context manager for iteration."""
         return self.client.logcat_stream_iter(*filters, format=format, pid=pid)
 
@@ -618,7 +618,7 @@ class LogcatModule:
         )
 
         # Calculate stats
-        stats = {
+        stats: dict[str, Any] = {
             "total": len(logs),
             "filtered": len(filtered),
             "false_positives": len(false_positives),
@@ -774,10 +774,10 @@ class LogcatModule:
         target.write_text("\n".join(log.raw for log in logs) + "\n", encoding="utf-8")
         return len(logs)
 
-    def get_log_stats(self, lines: int = 1000) -> dict:
+    def get_log_stats(self, lines: int = 1000) -> dict[str, Any]:
         """Get statistics about log levels in recent logs."""
         logs = self.client.logcat(format="threadtime", lines=lines)
-        stats: dict = {
+        stats: dict[str, Any] = {
             "total_lines": len(logs),
             "by_level": {},
             "by_tag": {},
@@ -821,4 +821,3 @@ class LogcatModule:
             if compiled.search(log.message) or compiled.search(log.tag):
                 matches.append(log)
         return matches
-

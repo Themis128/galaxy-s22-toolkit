@@ -218,7 +218,7 @@ class ScreenModule:
 
     def get_display_info(self) -> dict[str, Any]:
         """Get comprehensive display information."""
-        info = {}
+        info: dict[str, Any] = {}
         info["size"] = self.get_screen_size()
         info["density"] = self.get_screen_density()
 

@@ -87,12 +87,12 @@ class RootModule:
         output = self.client.execute("shell", f"su -c '{command}'", timeout=timeout)
         return output
 
-    def list_modules(self) -> list[dict[str, str]]:
+    def list_modules(self) -> list[dict[str, str | bool]]:
         """List installed Magisk modules from /data/adb/modules."""
         if not self.is_rooted():
             return []
         raw = self.run_privileged("ls /data/adb/modules", confirm=True)
-        modules = []
+        modules: list[dict[str, str | bool]] = []
         for entry in raw.strip().split():
             if not entry:
                 continue

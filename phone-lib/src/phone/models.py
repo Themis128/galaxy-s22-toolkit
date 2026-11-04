@@ -328,7 +328,7 @@ class AppInfo:
     app_name: str | None = None
 
     @property
-    def model(self) -> dict:
+    def model(self) -> dict[str, Any]:
         """Return dictionary representation for JSON serialization."""
         return {
             "package_name": self.package_name,
@@ -356,7 +356,7 @@ class RootInfo:
     modules_dir_present: bool = False
 
     @property
-    def model(self) -> dict:
+    def model(self) -> dict[str, Any]:
         """Dictionary form for JSON serialization."""
         return {
             "rooted": self.rooted,
@@ -420,7 +420,7 @@ class HealthReport:
     recent_anrs: list[LogEntry] = field(default_factory=list)
     issues: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
-    checks: list[dict] = field(default_factory=list)
+    checks: list[dict[str, Any]] = field(default_factory=list)
     overall_status: str = "healthy"
     summary_text: str = ""
 

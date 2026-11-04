@@ -16,7 +16,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 try:  # pragma: no cover - import probe
-    from windows_toasts import (  # type: ignore[import-not-found]
+    from windows_toasts import (
         InteractableWindowsToaster,
         Toast,
         ToastButton,

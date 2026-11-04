@@ -123,7 +123,8 @@ class TermuxClient:
                 text=True,
                 check=True,
             )
-            return json.loads(result.stdout)
+            data: dict[str, Any] = json.loads(result.stdout)
+            return data
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Termux API command failed: {e.stderr}") from e
         except json.JSONDecodeError as e:
@@ -137,24 +138,25 @@ class TermuxClient:
             health=data.get("health", "unknown"),
             present=data.get("present", False),
             status=data.get("status", "unknown"),
-            voltage=data.get("voltage"),
-            temperature=data.get("temperature"),
+            voltage=data.get("voltage") if data.get("voltage") is not None else None,
+            temperature=data.get("temperature") if data.get("temperature") is not None else None,
         )
 
     def get_battery_level(self) -> int:
         """Get current battery level percentage."""
         data = self._run_command(TermuxApiCommand.BATTERY_LEVEL.value)
-        return data.get("level", 0)
+        return int(data.get("level", 0))
 
     def get_wifi_info(self) -> TermuxWifiInfo:
         """Get current WiFi connection info."""
         try:
             data = self._run_command(TermuxApiCommand.WIFIINFO.value)
+            caps = data.get("capabilities")
             return TermuxWifiInfo(
                 ssid=data.get("ssid"),
                 bssid=data.get("bssid"),
-                capabilities=data.get("capabilities", "").split(","),
-                frequency=data.get("frequency"),
+                capabilities=caps.split(",") if caps else None,
+                frequency=data.get("frequency") if data.get("frequency") is not None else None,
             )
         except RuntimeError:
             # WiFi may be disconnected
@@ -164,28 +166,31 @@ class TermuxClient:
         """Get WiFi RSSI signal strength in dBm."""
         try:
             data = self._run_command(TermuxApiCommand.WIFI_RSSI.value)
-            return data.get("rssi")
+            rssi_val = data.get("rssi")
+            return int(rssi_val) if rssi_val is not None else None
         except RuntimeError:
             return None
 
     def get_cpu_info(self) -> TermuxCpuInfo:
         """Get CPU information."""
         data = self._run_command(TermuxApiCommand.CPU_INFO.value)
+        cpu_data = data.get("cpu", {})
+        first_core = cpu_data.get("0", {}) if cpu_data else {}
         return TermuxCpuInfo(
-            cores=len(data.get("cpu", {})),
-            model=data.get("cpu", {}).get("0", {}).get("model", "unknown"),
-            frequency=data.get("cpu", {}).get("0", {}).get("frequency", 0),
+            cores=len(cpu_data),
+            model=first_core.get("model", "unknown"),
+            frequency=first_core.get("frequency", 0),
         )
 
-    def get_memory_info(self) -> dict[str, int]:
+    def get_memory_info(self) -> dict[str, int | None]:
         """Get memory information from Termux."""
         data = self._run_command(TermuxApiCommand.MEMINFO.value)
         return {
-            "total": data.get("total"),
-            "free": data.get("free"),
-            "available": data.get("available"),
-            "buffers": data.get("buffers"),
-            "cached": data.get("cached"),
+            "total": data.get("total") if data.get("total") is not None else None,
+            "free": data.get("free") if data.get("free") is not None else None,
+            "available": data.get("available") if data.get("available") is not None else None,
+            "buffers": data.get("buffers") if data.get("buffers") is not None else None,
+            "cached": data.get("cached") if data.get("cached") is not None else None,
         }
 
     def get_location(self) -> dict[str, float] | None:
@@ -194,10 +199,11 @@ class TermuxClient:
             data = self._run_command(TermuxApiCommand.LOCATION.value)
             if data.get("from") != "gps":
                 return None
-            return {
-                "latitude": data.get("latitude"),
-                "longitude": data.get("longitude"),
-            }
+            lat = data.get("latitude")
+            lon = data.get("longitude")
+            if lat is not None and lon is not None:
+                return {"latitude": float(lat), "longitude": float(lon)}
+            return None
         except RuntimeError:
             return None
 
@@ -269,6 +275,7 @@ class TermuxClient:
 
         return str(full_path)
 
+
 class TermuxBootManager:
     """Manager for Termux boot scripts."""
 
@@ -307,7 +314,7 @@ def get_battery() -> int:
             check=True,
         )
         data = json.loads(result.stdout)
-        return data.get("level", 0)
+        return int(data.get("level", 0))
     except Exception:
         return 0
 
@@ -321,8 +328,9 @@ def get_wifi_ssid() -> str | None:
             text=True,
             check=True,
         )
-        data = json.loads(result.stdout)
-        return data.get("ssid")
+        data: dict[str, Any] = json.loads(result.stdout)
+        ssid = data.get("ssid")
+        return str(ssid) if ssid is not None else None
     except Exception:
         return None
 

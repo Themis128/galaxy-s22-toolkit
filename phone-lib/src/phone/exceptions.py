@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 
 class PhoneError(Exception):
     """Base exception for all phone toolkit errors."""
 
-    def __init__(self, message: str, *, details: dict | None = None) -> None:
+    def __init__(self, message: str, *, details: dict[str, Any] | None = None) -> None:
         super().__init__(message)
         self.details = details or {}
 

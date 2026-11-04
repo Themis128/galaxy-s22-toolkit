@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from .adb import AdbClient
@@ -227,7 +228,7 @@ class ThermalModule:
 
     def monitor_thermal(
         self,
-        callback: callable,
+        callback: Callable[[ThermalInfo], None],
         interval: float = 5.0,
         threshold_c: float = 70.0,
     ) -> None:
@@ -235,7 +236,7 @@ class ThermalModule:
         import threading
         import time
 
-        def monitor():
+        def monitor() -> None:
             while True:
                 info = self.get_thermal_info()
                 max_temp = max((z.temp_c for z in info.zones), default=0)

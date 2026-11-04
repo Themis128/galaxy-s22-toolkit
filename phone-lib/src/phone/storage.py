@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypedDict
 
 from .adb import AdbClient
 from .models import StorageInfo
+
+
+class StorageUsage(TypedDict):
+    """Storage usage information."""
+    total: int
+    used: int
+    free: int
 
 
 class StorageModule:
@@ -19,30 +26,30 @@ class StorageModule:
         output = self.client.execute("shell", "df")
         return self._parse_df(output)
 
-    def get_storage_usage(self):
+    def get_storage_usage(self) -> StorageUsage:
         """Get overall storage usage (total, used, free) for the main data partition.
         Returns an object with total, used, free attributes for diagnostics compatibility."""
         data_storage = self.get_data_storage()
         if data_storage:
-            return type('StorageUsage', (), {
-                'total': data_storage.total_bytes,
-                'used': data_storage.used_bytes,
-                'free': data_storage.free_bytes,
-            })()
+            return StorageUsage(
+                total=data_storage.total_bytes,
+                used=data_storage.used_bytes,
+                free=data_storage.free_bytes,
+            )
         # Fallback to internal storage
         internal = self.get_internal_storage()
         if internal:
-            return type('StorageUsage', (), {
-                'total': internal.total_bytes,
-                'used': internal.used_bytes,
-                'free': internal.free_bytes,
-            })()
+            return StorageUsage(
+                total=internal.total_bytes,
+                used=internal.used_bytes,
+                free=internal.free_bytes,
+            )
         # Last resort: sum all partitions
         storages = self.get_storage_info()
         total = sum(s.total_bytes for s in storages)
         used = sum(s.used_bytes for s in storages)
         free = sum(s.free_bytes for s in storages)
-        return type('StorageUsage', (), {'total': total, 'used': used, 'free': free})()
+        return StorageUsage(total=total, used=used, free=free)
 
     def _parse_df(self, output: str) -> list[StorageInfo]:
         """Parse df output."""
@@ -141,7 +148,7 @@ class StorageModule:
         except Exception:
             return []
 
-        files = []
+        files: list[dict[str, int | float | str]] = []
         for line in output.strip().split("\n"):
             if not line.strip():
                 continue

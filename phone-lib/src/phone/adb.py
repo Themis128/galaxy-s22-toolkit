@@ -23,10 +23,56 @@ from .exceptions import (
 from .models import LogEntry
 
 if TYPE_CHECKING:
+    from .apps import AppsModule
+    from .battery import BatteryModule
+    from .device import DeviceModule
     from .logcat import LogcatModule
+    from .network import NetworkModule
+    from .root import RootModule
+    from .screen import ScreenModule
+    from .storage import StorageModule
+    from .thermal import ThermalModule
 
 
 logger = logging.getLogger(__name__)
+
+
+class LogStream:
+    """Logcat streaming context manager."""
+
+    def __init__(self, client: AdbClient, filters: tuple[str, ...], format: str, pid: int | None):
+        self.client = client
+        self.filters = filters
+        self.format = format
+        self.pid = pid
+        self.proc: subprocess.Popen[str] | None = None
+
+    def __enter__(self) -> LogStream:
+        args = ["logcat", "-v", self.format]
+        if self.pid:
+            args.extend([f"--pid={self.pid}"])
+        if self.filters:
+            args.extend(self.filters)
+        else:
+            args.append("*:V")
+
+        self.proc = self.client.shell_interactive(" ".join(shlex.quote(a) for a in args))
+        return self
+
+    def __exit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: Any) -> None:
+        if self.proc:
+            self.proc.terminate()
+
+    def __iter__(self) -> LogStream:
+        return self
+
+    def __next__(self) -> str:
+        if self.proc is None or self.proc.stdout is None:
+            raise StopIteration
+        line = self.proc.stdout.readline()
+        if not line:
+            raise StopIteration
+        return line.rstrip('\n')
 
 
 class AdbClient:
@@ -65,9 +111,17 @@ class AdbClient:
         self._adb_path = adb_path or self._find_adb()
         self._connected_serial: str | None = None
         self._logcat_module: LogcatModule | None = None
+        self._apps_module: AppsModule | None = None
+        self._root_module: RootModule | None = None
+        self._device_module: DeviceModule | None = None
+        self._battery_module: BatteryModule | None = None
+        self._storage_module: StorageModule | None = None
+        self._network_module: NetworkModule | None = None
+        self._thermal_module: ThermalModule | None = None
+        self._screen_module: ScreenModule | None = None
 
     @property
-    def logcat_module(self):
+    def logcat_module(self) -> LogcatModule:
         """Get LogcatModule instance."""
         if self._logcat_module is None:
             from .logcat import LogcatModule
@@ -75,65 +129,65 @@ class AdbClient:
         return self._logcat_module
 
     @property
-    def apps(self):
+    def apps(self) -> AppsModule:
         """Get AppsModule instance."""
-        if not hasattr(self, '_apps_module') or self._apps_module is None:
+        if self._apps_module is None:
             from .apps import AppsModule
             self._apps_module = AppsModule(self)
         return self._apps_module
 
     @property
-    def root(self):
+    def root(self) -> RootModule:
         """Get RootModule instance."""
-        if not hasattr(self, '_root_module') or self._root_module is None:
+        if self._root_module is None:
             from .root import RootModule
             self._root_module = RootModule(self)
         return self._root_module
 
     @property
-    def device(self):
+    def device(self) -> DeviceModule:
         """Get DeviceModule instance."""
-        if not hasattr(self, '_device_module') or self._device_module is None:
+        if self._device_module is None:
             from .device import DeviceModule
             self._device_module = DeviceModule(self)
         return self._device_module
 
     @property
-    def battery(self):
+    def battery(self) -> BatteryModule:
         """Get BatteryModule instance."""
-        if not hasattr(self, '_battery_module') or self._battery_module is None:
+        if self._battery_module is None:
             from .battery import BatteryModule
             self._battery_module = BatteryModule(self)
         return self._battery_module
 
     @property
-    def storage(self):
+    def storage(self) -> StorageModule:
         """Get StorageModule instance."""
-        if not hasattr(self, '_storage_module') or self._storage_module is None:
+        if self._storage_module is None:
             from .storage import StorageModule
             self._storage_module = StorageModule(self)
         return self._storage_module
 
     @property
-    def network(self):
+    def network(self) -> NetworkModule:
         """Get NetworkModule instance."""
-        if not hasattr(self, '_network_module') or self._network_module is None:
+        if self._network_module is None:
             from .network import NetworkModule
             self._network_module = NetworkModule(self)
         return self._network_module
 
     @property
-    def thermal(self):
+    def thermal(self) -> ThermalModule:
         """Get ThermalModule instance."""
-        if not hasattr(self, '_thermal_module') or self._thermal_module is None:
+        if self._thermal_module is None:
             from .thermal import ThermalModule
             self._thermal_module = ThermalModule(self)
         return self._thermal_module
 
     @property
-    def screen(self):
+    def screen(self) -> ScreenModule:
         """Get ScreenModule instance."""
-        if not hasattr(self, '_screen_module') or self._screen_module is None:
+        if self._screen_module is None:
             from .screen import ScreenModule
             self._screen_module = ScreenModule(self)
         return self._screen_module
@@ -327,7 +381,7 @@ class AdbClient:
             parts = line.split()
             if len(parts) < 2:
                 continue
-            device = {
+            device: dict[str, str] = {
                 "serial": parts[0],
                 "state": parts[1],
             }
@@ -532,6 +586,8 @@ class AdbClient:
 
         proc = self.shell_interactive(" ".join(shlex.quote(a) for a in args))
         try:
+            if proc.stdout is None:
+                return
             for line in iter(proc.stdout.readline, ""):
                 if not line:
                     break
@@ -547,7 +603,7 @@ class AdbClient:
         *filters: str,
         format: str = "threadtime",
         pid: int | None = None,
-    ):
+    ) -> LogStream:
         """Stream logcat lines as a context manager for iteration.
 
         Usage:
@@ -555,39 +611,6 @@ class AdbClient:
                 for line in lines:
                     print(line)
         """
-        class LogStream:
-            def __init__(self, client, filters, format, pid):
-                self.client = client
-                self.filters = filters
-                self.format = format
-                self.pid = pid
-                self.proc = None
-
-            def __enter__(self):
-                args = ["logcat", "-v", format]
-                if pid:
-                    args.extend([f"--pid={pid}"])
-                if filters:
-                    args.extend(filters)
-                else:
-                    args.append("*:V")
-
-                self.proc = self.client.shell_interactive(" ".join(shlex.quote(a) for a in args))
-                return self
-
-            def __exit__(self, exc_type, exc_val, exc_tb):
-                if self.proc:
-                    self.proc.terminate()
-
-            def __iter__(self):
-                return self
-
-            def __next__(self):
-                line = self.proc.stdout.readline()
-                if not line:
-                    raise StopIteration
-                return line.rstrip('\n')
-
         return LogStream(self, filters, format, pid)
 
     def _parse_logcat(self, output: str, format: str) -> list[LogEntry]:
