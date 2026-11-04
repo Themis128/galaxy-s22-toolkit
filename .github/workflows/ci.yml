@@ -47,12 +47,16 @@ jobs:
         uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: |
-          uv pip install --system pytest pytest-asyncio pytest-mock
+          uv pip install --system pytest pytest-asyncio pytest-mock httpx pyyaml fastapi
           cd phone-lib && uv pip install --system -e ".[dev]"
       - name: Run unit tests
-        run: pytest phone-lib/tests -v --tb=short -p no:cacheprovider -k "not device"
+        # -m "not device" (marker) instead of -k: -k "not device" also
+        # name-matched and silently skipped all of test_device.py
+        run: pytest phone-lib/tests -v --tb=short -p no:cacheprovider -m "not device"
         env:
           PYTHONPATH: phone-lib/src
+      - name: Run dashboard tests
+        run: pytest dashboard/tests -v --tb=short -p no:cacheprovider
 
   build-wheel:
     name: Build Wheel
