@@ -1,6 +1,6 @@
 # Galaxy S22+ Toolkit
 
-Complete phone-management suite for a Samsung Galaxy S22+ (SM-S906B, Exynos international, rootable variant) over ADB: diagnostics, monitoring dashboard, file transfer, logcat, app management — plus guarded root support.
+Complete phone-management suite for a Samsung Galaxy S22+ (SM-S906B, Exynos international, rootable variant) over ADB: diagnostics, monitoring dashboard, approved auto-repair with desktop-toast approvals, file transfer, logcat, app management — plus guarded root support. Reaches the phone over USB or wireless ADB through Tailscale, with auto-reconnect after reboots.
 
 > **Root warning**: rooting requires unlocking the bootloader, which permanently
 > wipes data and trips the Knox eFuse (Samsung Pay/Wallet, Secure Folder, Samsung
@@ -9,17 +9,22 @@ Complete phone-management suite for a Samsung Galaxy S22+ (SM-S906B, Exynos inte
 ## Quickstart
 
 ```bash
-# 1. Install everything (phone-lib + 5 skills + rooting)
+# 1. Install everything (phone-lib + 6 skills + rooting)
 bash galaxy-s22-toolkit-skills/install.sh
 
 # Quickstart
 phone-diagnostics device        # verify connectivity + identity
 phone-diagnostics run           # full health report
+phone-repair recommend          # repair actions suggested by diagnostics
+phone-repair run auto           # run all low-risk repairs (approval policy)
 phone-app-manager list          # installed apps
 phone-logcat errors --json      # crash/ANR detection
 
-# Real-time monitoring dashboard
-python -m uvicorn dashboard.app:app --host 127.0.0.1 --port 8080   # from repo root
+# Real-time monitoring dashboard (8080 is occupied by another service here)
+python dashboard/app.py         # from repo root; serves http://127.0.0.1:8081
+
+# Or in Docker (reaches the phone over wireless ADB through the tailnet)
+docker compose up -d --build
 ```
 
 ## Commands
@@ -36,6 +41,11 @@ python -m uvicorn dashboard.app:app --host 127.0.0.1 --port 8080   # from repo r
 | `phone-logcat stream --tag <TAG>` | Live log stream |
 | `phone-app-manager list` | Installed apps |
 | `phone-app-manager clear <pkg>` | Clear app data |
+| `phone-repair list` | All repair actions with risk levels |
+| `phone-repair recommend` | Actions suggested by the latest diagnostics |
+| `phone-repair run auto` | Run all low-risk repairs (approval policy, JSONL history) |
+| `phone-repair run flush_dns clear_logcat_buffers` | Run specific repairs |
+| `phone-repair history` | Persisted repair history |
 | `phone-root preflight` | Root-readiness GO/NO-GO report |
 | `phone-root backup` | Full pre-flash backup |
 | `phone-root verify` | Post-flash root verification |
@@ -47,10 +57,13 @@ python -m uvicorn dashboard.app:app --host 127.0.0.1 --port 8080   # from repo r
 ├── ARCHITECTURE.md      # layer diagram, API contract, safety model
 ├── phone-lib/           # Layer 1: typed ADB wrapper (pkg name: galaxy-s22-toolkit)
 ├── diagnostics/         # Layer 2: scheduled health checks + config.yaml
-├── .zcode/skills/       # Layer 3: 5 CLI skills (phone-diagnostics, phone-screen-control,
-│                        #          phone-file-transfer, phone-logcat, phone-app-manager)
-├── rooting/             # 6th package: phone-root CLI + RUNBOOK.md
-├── dashboard/           # Layer 4: FastAPI + WebSocket + Chart.js
+│                        #          (task_scheduler.xml - registered, daily 03:00, silent)
+├── .zcode/skills/       # Layer 3: 6 CLI skills (phone-diagnostics, phone-screen-control,
+│                        #          phone-file-transfer, phone-logcat, phone-app-manager,
+│                        #          phone-repair)
+├── rooting/             # 7th package: phone-root CLI + RUNBOOK.md
+├── dashboard/           # Layer 4: FastAPI + WebSocket + Chart.js (+ Dockerfile, README)
+├── docker-compose.yml   # containerized dashboard over tailnet wireless ADB
 ├── galaxy-s22-toolkit-skills/   # unified installer (install.sh) — Devin-ready
 ├── scripts/             # termux bootstrap, wireless ADB setup, cleanup helpers
 ├── adb-workflow.sh|ps1  # original workflow scripts (reference)
