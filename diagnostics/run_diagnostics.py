@@ -224,6 +224,18 @@ class DiagnosticsRunner:
 
         return CheckResult(name="battery", status=status, message=message, details=details)
 
+    # Read-only factory partitions (/, /vendor, /product, /apex/*, ...) are
+    # immutable and always near "full" - thresholding them produces a wall of
+    # false alarms on every run. Only writable, user-relevant mounts are
+    # threshold-evaluated; everything else stays in the report details.
+    USER_PARTITION_PREFIXES = ("/data", "/storage/emulated", "/sdcard")
+
+    def _is_user_partition(self, mount_point: str) -> bool:
+        return any(
+            mount_point == prefix or mount_point.startswith(prefix + "/")
+            for prefix in self.USER_PARTITION_PREFIXES
+        )
+
     def check_storage(self) -> CheckResult:
         """Check storage usage."""
         storage = StorageModule(self.client)
@@ -235,7 +247,6 @@ class DiagnosticsRunner:
             "partitions": [],
             "total_used_gb": 0,
             "total_free_gb": 0,
-            "total_size_gb": 0,
         }
 
         issues = []
@@ -252,7 +263,9 @@ class DiagnosticsRunner:
             details["partitions"].append(part_info)
             details["total_used_gb"] += part.used_gb
             details["total_free_gb"] += part.free_gb
-            details["total_size_gb"] += part.total_gb
+
+            if not self._is_user_partition(part.mount_point):
+                continue
 
             if part.usage_percent > thresholds["max_usage_percent"]:
                 issues.append(

@@ -60,7 +60,7 @@ thresholds:
 notifications:
   # Desktop notifications (Windows toast)
   desktop:
-    enabled: true
+    enabled: false  # silenced per user request
     only_on_issues: true
   
   # Webhook (Discord, Slack, generic HTTP)
@@ -123,7 +123,7 @@ repair:
   approval_timeout_s: 120
   # Show desktop toast notifications for repair events (approval prompts,
   # batch summaries). Falls back to console prompt when unavailable.
-  desktop_notifications: true
+  desktop_notifications: false  # silenced per user request
   # Persistent repair history (JSONL, one result per line)
   history_file: "logs/repair_history.jsonl"
   history_max_entries: 500

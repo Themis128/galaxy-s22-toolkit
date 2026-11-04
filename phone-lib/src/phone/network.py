@@ -177,13 +177,19 @@ class NetworkModule:
 
     def _get_gateway(self) -> str | None:
         """Get default gateway."""
-        try:
-            output = self.client.execute("shell", "ip", "route", "show", "default")
-            match = re.search(r"default via (\d+\.\d+\.\d+\.\d+)", output)
-            if match:
-                return match.group(1)
-        except Exception:
-            pass
+        # The default route often lives in a per-network table on modern
+        # Android, so `ip route show default` alone can come back empty.
+        for args in (
+            ("shell", "ip", "route", "show", "default"),
+            ("shell", "ip", "route", "show", "table", "all"),
+        ):
+            try:
+                output = self.client.execute(*args)
+                match = re.search(r"default via (\d+\.\d+\.\d+\.\d+)", output)
+                if match:
+                    return match.group(1)
+            except Exception:
+                continue
         return None
 
     def _check_internet(self, host: str = "8.8.8.8", port: int = 53, timeout: float = 3.0) -> bool:
@@ -200,6 +206,9 @@ class NetworkModule:
                 str(int(timeout)),
                 host,
                 str(port),
+                "&&",
+                "echo",
+                "connected",  # toybox nc is silent on success; print a marker
                 check=False,
             )
             return "succeeded" in result.lower() or "connected" in result.lower()
@@ -213,8 +222,9 @@ class NetworkModule:
                 "ping",
                 "-c",
                 "1",
+                # toybox ping -W is in SECONDS (ms here fails instantly)
                 "-W",
-                str(int(timeout * 1000)),
+                str(max(1, int(timeout))),
                 host,
                 check=False,
             )
@@ -256,11 +266,18 @@ class NetworkModule:
             "link_speed": link_speed or 0,
         }
 
-    def test_dns_resolution(self, domain: str = "google.com") -> bool:
-        """Test DNS resolution."""
+    def test_dns_resolution(self, domain: str = "google.com", timeout: float = 3.0) -> bool:
+        """Test DNS resolution; timeout (seconds) bounds the probe."""
         try:
             output = self.client.execute("shell", "nslookup", domain, check=False)
-            return "Name:" in output or "Address:" in output
+            if "Name:" in output or "Address:" in output:
+                return True
+            # nslookup is absent on recent Android (toybox dropped it);
+            # ping only runs when the hostname resolved
+            output = self.client.execute(
+                "shell", "ping", "-c", "1", "-W", str(max(1, int(timeout))), domain, check=False
+            )
+            return "1 received" in output or "1 packets received" in output
         except Exception:
             return False
 
