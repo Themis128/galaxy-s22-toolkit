@@ -38,6 +38,11 @@ All notable changes to the Galaxy S22+ toolkit. Format loosely follows
   `install_git_hooks.py`, `doctor.py` (environment health incl. backup
   freshness), `update_check.py` (security-patch age verdict; can open the
   system update screen).
+- **Insights & alerting foundation**: `tools/insights.py` + `/api/insights`
+  + dashboard_client `insights` - battery drain rate (median %/h,
+  glitch-filtered), storage growth GB/week on /data with ETA to 90%
+  (needs 3+ days history), memory/thermal p95 with OK/WATCH/ACT
+  verdicts. Skill: `phone-insights`.
 - **Skills**: `phone-update-check`, `phone-doctor`, `phone-connect`
   (wireless ADB status/connect/reconnect), `phone-remote-control`
   (dashboard REST API client; the Groq bot's client-side contract).

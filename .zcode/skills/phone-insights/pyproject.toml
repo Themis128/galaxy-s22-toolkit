@@ -1,0 +1,5 @@
+[project]
+name = "phone-insights"
+version = "1.0.0"
+description = "Degradation insights skill (implementation: tools/insights.py)"
+requires-python = ">=3.10"

@@ -99,3 +99,19 @@ Details merged into Task 2 above.
 
 ## Critic Responses
 Panel could not be dispatched: the Agent tool fails with "Cannot start subagent: No reasoning level selected" (harness config issue, all subagent types). Session recon + live device probes substitute for the recon phase; plan self-reviewed against the forge grammar (tasks contiguous, criteria binary-decidable, no placeholders). Deviation is explicit: this plan is self-certified, not panel-certified.
+---
+
+# Phase 5 addendum: Insights & Alerting (2026-11-05)
+
+**Goal:** Turn the accumulated metrics history (2887 snapshots) into degradation
+insights (battery drain rate, storage growth + ETA, memory/thermal pressure) with
+verdicts, exposed via CLI, `/api/insights`, dashboard_client, and a skill.
+
+**Verification:** pure-function tests on synthetic series (tools/test_insights.py);
+live run against the real backup DB; /api/insights green in-container.
+
+**Tasks:** 1) tools/insights.py (pure analyzers + CLI, stdlib-only, reads a DB
+path - default: newest backup); 2) dashboard /api/insights + client subcommand;
+3) skill phone-insights; 4) tests + CHANGELOG + CI.
+
+Forge panel deviation stands (subagent start fails: reasoning-level config).

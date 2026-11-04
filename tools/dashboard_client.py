@@ -74,6 +74,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("repair-actions")
     sub.add_parser("repair-history")
     sub.add_parser("diagnose")
+    sub.add_parser("insights")
     p_t = sub.add_parser("trends")
     p_t.add_argument("metric")
     p_t.add_argument("--period", choices=["hourly", "daily", "stats"], default="hourly")
@@ -94,6 +95,8 @@ def main(argv: list[str] | None = None) -> int:
         s, p = request(args.base_url, "/api/repair/actions", key)
     elif args.cmd == "repair-history":
         s, p = request(args.base_url, "/api/repair/history", key)
+    elif args.cmd == "insights":
+        s, p = request(args.base_url, "/api/insights", key)
     elif args.cmd == "diagnose":
         s, p = request(args.base_url, "/api/diagnostics/run", key, method="POST", body={})
     elif args.cmd == "trends":

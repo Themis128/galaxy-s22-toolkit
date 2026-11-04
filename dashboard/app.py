@@ -437,6 +437,26 @@ async def api_trends_rollup(hours_back: int = 2, days_back: int = 2):
     return JSONResponse({"hourly_inserted": hourly, "daily_inserted": daily})
 
 
+@app.get("/api/insights")
+async def api_insights():
+    """Degradation insights computed from the raw history."""
+    import importlib.util
+    import sqlite3
+
+    spec = importlib.util.spec_from_file_location(
+        "insights", PROJECT_ROOT / "tools" / "insights.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    db = get_metrics_db()
+    conn = sqlite3.connect(f"file:{db.db_path}?mode=ro", uri=True)
+    try:
+        report = mod.analyze(conn)
+    finally:
+        conn.close()
+    return JSONResponse(report)
+
+
 @app.websocket("/ws/live")
 async def ws_live(websocket: WebSocket):
     """Live updates: initial snapshot, then collector broadcasts."""

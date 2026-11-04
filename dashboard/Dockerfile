@@ -9,6 +9,7 @@ WORKDIR /app
 COPY phone-lib/ /app/phone-lib/
 COPY diagnostics/config.yaml /app/diagnostics/config.yaml
 COPY dashboard/ /app/dashboard/
+COPY tools/ /app/tools/
 
 RUN pip install --no-cache-dir fastapi "uvicorn[standard]" jinja2 pyyaml
 
