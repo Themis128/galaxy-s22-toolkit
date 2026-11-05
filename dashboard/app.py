@@ -144,19 +144,30 @@ def _device_wireless_settings() -> dict | None:
         return None
 
 
+def _ensure_client():
+    """Return a live phone client, reconnecting when the transport dropped.
+
+    Wireless ADB transports die silently (phone TCP listener reset, network
+    blips). The old code connected once at startup and never retried - the
+    alert board then silently went blind. create_client's auto-connect +
+    preferred_serial resolution does the recovery for us.
+    """
+    global client
+    if client is not None and client.is_connected:
+        return client
+    client = create_client(
+        os.getenv("PHONE_ADB_SERIAL") or None,
+        wireless=_device_wireless_settings(),
+    )
+    if not client.is_connected:
+        raise ConnectionError("No ADB device connected")
+    return client
+
+
 def _collect_once() -> dict:
     """One blocking collection pass (runs in a worker thread)."""
     global client
-    if client is None:
-        # PHONE_ADB_SERIAL overrides config.yaml's USB serial - needed when
-        # the dashboard runs in a container that reaches the device over
-        # wireless ADB (e.g. the tailnet address of the phone)
-        client = create_client(
-            os.getenv("PHONE_ADB_SERIAL") or None,
-            wireless=_device_wireless_settings(),
-        )
-        if not client.is_connected:
-            raise ConnectionError("No ADB device connected")
+    client = _ensure_client()
 
     device = client.device.get_device_info()
     battery = client.battery.get_battery_info()
@@ -435,6 +446,60 @@ async def api_trends_rollup(hours_back: int = 2, days_back: int = 2):
         logger.error("Rollup computation failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return JSONResponse({"hourly_inserted": hourly, "daily_inserted": daily})
+
+
+@app.get("/alerts", response_class=HTMLResponse)
+async def alerts_page(request: Request):
+    """Human-readable alert board (severity-sorted, auto-refresh)."""
+    return templates.TemplateResponse(request, "alerts.html")
+
+
+def _load_tool(name: str):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        name, PROJECT_ROOT / "tools" / f"{name}.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@app.get("/api/alerts")
+async def api_alerts():
+    """Active alerts from the current metrics history (stateless)."""
+    import sqlite3
+
+    insights_mod = _load_tool("insights")
+    alerts_mod = _load_tool("alerts")
+    db = get_metrics_db()
+    conn = sqlite3.connect(f"file:{db.db_path}?mode=ro", uri=True)
+    try:
+        insights = insights_mod.analyze(conn)["insights"]
+    finally:
+        conn.close()
+    # Patch age comes straight from the connected phone here (the
+    # container has no diagnostics reports to read).
+    try:
+        from datetime import date
+
+        patch = _ensure_client().device.get_security_patch()
+        patch_days = (date.today()
+                      - datetime.strptime(patch[:10], "%Y-%m-%d").date()).days
+        insights.append({
+            "metric": "security patch age", "value": patch_days,
+            "unit": f"days (patch {patch[:10]})",
+            "verdict": ("OK" if patch_days < 60 else
+                        "WATCH" if patch_days <= 90 else "ACT"),
+        })
+    except Exception as exc:
+        logger.warning("alerts: patch age unavailable: %s", exc)
+    return JSONResponse({
+        "alerts": alerts_mod.evaluate(insights),
+        "generated": insights_mod.datetime.now(
+            insights_mod.timezone.utc
+        ).replace(tzinfo=None).isoformat() + "Z",
+    })
 
 
 @app.get("/api/insights")

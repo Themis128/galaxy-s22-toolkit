@@ -25,6 +25,7 @@ python tools/dashboard_client.py metrics
 python tools/dashboard_client.py repair-actions
 python tools/dashboard_client.py repair-history
 python tools/dashboard_client.py diagnose              # triggers a run
+python tools/dashboard_client.py alerts                # active alerts
 python tools/dashboard_client.py repair clear_app_caches --confirm
 ```
 
