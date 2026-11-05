@@ -19,7 +19,15 @@ sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(PROJECT_ROOT / "phone-lib" / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "diagnostics"))
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect  # noqa: E402
+from fastapi import (  # noqa: E402
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.responses import HTMLResponse, JSONResponse  # noqa: E402
 from fastapi.security import APIKeyHeader  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
@@ -451,7 +459,35 @@ async def api_trends_rollup(hours_back: int = 2, days_back: int = 2):
 @app.get("/alerts", response_class=HTMLResponse)
 async def alerts_page(request: Request):
     """Human-readable alert board (severity-sorted, auto-refresh)."""
-    return templates.TemplateResponse(request, "alerts.html")
+    import sqlite3
+
+    insights_mod = _load_tool("insights")
+    alerts_mod = _load_tool("alerts")
+    db = get_metrics_db()
+    conn = sqlite3.connect(f"file:{db.db_path}?mode=ro", uri=True)
+    try:
+        insights = insights_mod.analyze(conn)["insights"]
+    finally:
+        conn.close()
+    # Patch age comes straight from the connected phone here (the
+    # container has no diagnostics reports to read).
+    try:
+        from datetime import date
+
+        patch = _ensure_client().device.get_security_patch()
+        patch_days = (date.today() - datetime.strptime(patch[:10], "%Y-%m-%d").date()).days
+        insights.append(
+            {
+                "metric": "security patch age",
+                "value": patch_days,
+                "unit": f"days (patch {patch[:10]})",
+                "verdict": ("OK" if patch_days < 90 else "WATCH" if patch_days <= 180 else "ACT"),
+            }
+        )
+    except Exception as exc:
+        logger.warning("alerts: patch age unavailable: %s", exc)
+    alerts = alerts_mod.evaluate(insights)
+    return templates.TemplateResponse(request, "alerts.html", {"alerts": alerts})
 
 
 def _load_tool(name: str):
@@ -488,7 +524,7 @@ async def api_alerts():
                 "metric": "security patch age",
                 "value": patch_days,
                 "unit": f"days (patch {patch[:10]})",
-                "verdict": ("OK" if patch_days < 60 else "WATCH" if patch_days <= 90 else "ACT"),
+                "verdict": ("OK" if patch_days < 90 else "WATCH" if patch_days <= 180 else "ACT"),
             }
         )
     except Exception as exc:

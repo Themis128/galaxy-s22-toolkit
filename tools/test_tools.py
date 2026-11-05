@@ -142,6 +142,8 @@ class TestRelocateAndPatchAge:
         write_report((date.today() - timedelta(days=30)).isoformat())
         assert security_patch_age(tmp_path / "diagnostics" / "reports")["verdict"] == "OK"
         write_report((date.today() - timedelta(days=92)).isoformat())
+        assert security_patch_age(tmp_path / "diagnostics" / "reports")["verdict"] == "WATCH"
+        write_report((date.today() - timedelta(days=181)).isoformat())
         assert security_patch_age(tmp_path / "diagnostics" / "reports")["verdict"] == "ACT"
 
 

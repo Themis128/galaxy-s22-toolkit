@@ -54,7 +54,7 @@ thresholds:
       filter_benign: true
   
   security:
-    max_patch_age_days: 90
+    max_patch_age_days: 180
 
 # Notification settings
 notifications:

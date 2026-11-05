@@ -198,7 +198,8 @@ def security_patch_age(reports_dir: Path | None = None) -> dict[str, Any]:
     except (ValueError, KeyError, TypeError, json.JSONDecodeError):
         return {"metric": "security patch age", "value": None, "verdict": "NO DATA"}
     days = (date.today() - patch_date).days
-    verdict = "OK" if days < 60 else "WATCH" if days <= 90 else "ACT"
+    # OK < 90, WATCH 90-180, ACT > 180 (aligned with config.yaml max_patch_age_days)
+    verdict = "OK" if days < 90 else "WATCH" if days <= 180 else "ACT"
     return {
         "metric": "security patch age",
         "value": days,
