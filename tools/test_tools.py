@@ -108,3 +108,38 @@ class TestDashboardClient:
 
         rc = main(["--base-url", "http://127.0.0.1:1", "repair", "clear_app_caches"])
         assert rc == 2
+
+
+class TestRelocateAndPatchAge:
+    def test_plan_lists_all_steps(self):
+        from relocate_repo import DEFAULT_TARGET, plan
+
+        steps = plan(DEFAULT_TARGET)
+        joined = chr(10).join(steps)
+        assert "clone" in joined and "re-task" in joined and "manual" in joined
+        assert str(DEFAULT_TARGET) in steps[0]
+
+    def test_under_onedrive_detection(self):
+        from relocate_repo import under_onedrive
+
+        assert under_onedrive("\\Users\\x\\OneDrive\\repo")
+        assert not under_onedrive("\\dev\\repo")
+
+    def test_patch_age_verdicts(self, tmp_path):
+        import json as _json
+        from datetime import date, timedelta
+
+        from insights import security_patch_age
+
+        def write_report(patch_date):
+            d = tmp_path / "diagnostics" / "reports"
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "health_report_2026-11-05.json").write_text(
+                _json.dumps({"device": {"security_patch": patch_date}}),
+                encoding="utf-8",
+            )
+
+        write_report((date.today() - timedelta(days=30)).isoformat())
+        assert security_patch_age(tmp_path / "diagnostics" / "reports")["verdict"] == "OK"
+        write_report((date.today() - timedelta(days=92)).isoformat())
+        assert security_patch_age(tmp_path / "diagnostics" / "reports")["verdict"] == "ACT"

@@ -183,6 +183,30 @@ def percentile_pressure(
     }
 
 
+def security_patch_age(reports_dir: Path | None = None) -> dict[str, Any]:
+    """Patch-age verdict from the newest diagnostics report (nightly nag)."""
+    from datetime import date
+
+    reports_dir = reports_dir or (REPO / "diagnostics" / "reports")
+    files = sorted(reports_dir.glob("health_report_*.json"))
+    if not files:
+        return {"metric": "security patch age", "value": None, "verdict": "NO DATA"}
+    try:
+        report = json.loads(files[-1].read_text(encoding="utf-8"))
+        patch = report["device"]["security_patch"]
+        patch_date = datetime.strptime(patch[:10], "%Y-%m-%d").date()
+    except (ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return {"metric": "security patch age", "value": None, "verdict": "NO DATA"}
+    days = (date.today() - patch_date).days
+    verdict = "OK" if days < 60 else "WATCH" if days <= 90 else "ACT"
+    return {
+        "metric": "security patch age",
+        "value": days,
+        "unit": "days (patch " + patch[:10] + ")",
+        "verdict": verdict,
+    }
+
+
 def analyze(conn: sqlite3.Connection) -> dict[str, Any]:
     return {
         "generated": datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z",
@@ -192,6 +216,7 @@ def analyze(conn: sqlite3.Connection) -> dict[str, Any]:
             storage_growth(conn, days=14),
             percentile_pressure(conn, "$.memory.usage_percent"),
             percentile_pressure(conn, "$.battery.temperature_c", watch=33.0, act=38.0),
+            security_patch_age(),
         ],
     }
 

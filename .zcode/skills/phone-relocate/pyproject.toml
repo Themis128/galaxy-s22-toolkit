@@ -1,0 +1,5 @@
+[project]
+name = "phone-relocate"
+version = "1.0.0"
+description = "Repo relocation skill (implementation: tools/relocate_repo.py)"
+requires-python = ">=3.10"
