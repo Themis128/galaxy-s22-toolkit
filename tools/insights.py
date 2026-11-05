@@ -146,7 +146,9 @@ def _daily_means(series: list[tuple[datetime, float]]) -> list[tuple[datetime, f
     return out
 
 
-def _storage_metric(conn: sqlite3.Connection, field: str, days: int) -> list[tuple[datetime, float]]:
+def _storage_metric(
+    conn: sqlite3.Connection, field: str, days: int
+) -> list[tuple[datetime, float]]:
     """Time series of a field from the /data entry of the storage array."""
     cutoff = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)).isoformat()
     rows = conn.execute(

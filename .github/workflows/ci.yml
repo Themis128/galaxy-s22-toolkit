@@ -25,14 +25,17 @@ jobs:
         uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: |
-          uv pip install --system ruff mypy pytest pytest-asyncio
+          uv pip install --system ruff mypy pytest pytest-asyncio fastapi types-PyYAML
           cd phone-lib && uv pip install --system -e ".[dev]"
       - name: Ruff check
-        run: ruff check phone-lib diagnostics dashboard
+        run: ruff check phone-lib diagnostics dashboard tools
       - name: Ruff format check
-        run: ruff format --check phone-lib diagnostics dashboard
+        run: ruff format --check phone-lib diagnostics dashboard tools
       - name: Mypy
-        run: mypy phone-lib/src --strict
+        # --explicit-package-bases: tools/ and diagnostics/ have no
+        # __init__.py; without the flag mypy resolves some files under two
+        # module names and aborts.
+        run: mypy diagnostics dashboard tools phone-lib/src --strict --explicit-package-bases
 
   unit-tests:
     name: Unit Tests
@@ -57,6 +60,8 @@ jobs:
           PYTHONPATH: phone-lib/src
       - name: Run dashboard tests
         run: pytest dashboard/tests -v --tb=short -p no:cacheprovider
+      - name: Run tools tests
+        run: pytest tools/test_tools.py tools/test_insights.py -v --tb=short -p no:cacheprovider
 
   build-wheel:
     name: Build Wheel

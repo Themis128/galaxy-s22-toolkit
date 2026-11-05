@@ -81,9 +81,7 @@ async def verify_api_key(
     """Verify API key and optionally Tailscale IP allowlist."""
     if api_key != GROQ_BOT_API_KEY:
         client_host = request.client.host if request and request.client else "unknown"
-        logger.warning(
-            "Invalid API key attempt from %s", client_host
-        )
+        logger.warning("Invalid API key attempt from %s", client_host)
         raise HTTPException(status_code=401, detail="Invalid API key")
 
     # Check Tailscale allowlist if configured
@@ -722,15 +720,17 @@ async def api_repair_execute(request: RepairActionRequest) -> JSONResponse:
 
 def _repair_result_json(result: Any) -> JSONResponse:
     """Serialize a RepairResult for API responses."""
-    return JSONResponse({
-        "action_name": result.action.name,
-        "success": result.success,
-        "message": result.message,
-        "details": result.details,
-        "duration_ms": result.duration_ms,
-        "timestamp": result.timestamp.isoformat(),
-        "requires_reboot": result.requires_reboot,
-    })
+    return JSONResponse(
+        {
+            "action_name": result.action.name,
+            "success": result.success,
+            "message": result.message,
+            "details": result.details,
+            "duration_ms": result.duration_ms,
+            "timestamp": result.timestamp.isoformat(),
+            "requires_reboot": result.requires_reboot,
+        }
+    )
 
 
 def _repair_history_path() -> str | None:

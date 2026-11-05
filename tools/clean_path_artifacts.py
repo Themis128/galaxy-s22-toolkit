@@ -17,7 +17,7 @@ import os
 import sys
 from pathlib import Path
 
-ARTIFACT_CHAR = "\uF03A"
+ARTIFACT_CHAR = "\uf03a"
 
 
 def find_artifacts(root: Path) -> list[Path]:

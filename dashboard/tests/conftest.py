@@ -6,7 +6,9 @@ created in the FastAPI lifespan, which TestClient does not trigger.
 
 import os
 import sys
+from collections.abc import Iterator
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 for _p in (
@@ -23,10 +25,14 @@ os.environ.setdefault("GROQ_BOT_API_KEY", "test-key-12345")
 import pytest  # noqa: E402
 
 from dashboard import metrics_db as metrics_db_mod  # noqa: E402
+from dashboard.metrics_db import MetricsDB  # noqa: E402
+
+if TYPE_CHECKING:
+    from fastapi.testclient import TestClient
 
 
 @pytest.fixture()
-def tmp_db(tmp_path):
+def tmp_db(tmp_path: Path) -> Iterator[MetricsDB]:
     """Fresh MetricsDB in a temp directory."""
     db = metrics_db_mod.MetricsDB(db_path=tmp_path / "metrics.db")
     yield db
@@ -34,7 +40,7 @@ def tmp_db(tmp_path):
 
 
 @pytest.fixture()
-def api_client(tmp_db, monkeypatch):
+def api_client(tmp_db: MetricsDB, monkeypatch: pytest.MonkeyPatch) -> Iterator["TestClient"]:
     """TestClient with get_metrics_db patched to the temp database."""
     from dashboard import app as app_module
 

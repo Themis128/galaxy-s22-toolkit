@@ -23,7 +23,7 @@ REPO = Path(__file__).resolve().parents[1]
 
 def load_client() -> object:  # phone.Client type, but phone lacks stubs
     """Connect like production: diagnostics/config.yaml wireless settings."""
-    from phone import create_client  # type: ignore[import-untyped]
+    from phone import create_client
 
     wireless = None
     cfg = REPO / "diagnostics" / "config.yaml"

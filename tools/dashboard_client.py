@@ -70,7 +70,11 @@ def _validate_base_url(base_url: str, allow_private: bool = False) -> None:
             continue
         # Allow Tailscale CGNAT (100.64.0.0/10) - only for IPv4
         if ip.version == 4:
-            if ipaddress.IPv4Address("100.64.0.0") <= ip <= ipaddress.IPv4Address("100.127.255.255"):
+            if (
+                ipaddress.IPv4Address("100.64.0.0")
+                <= ip
+                <= ipaddress.IPv4Address("100.127.255.255")
+            ):
                 continue
         # Block other private ranges
         for net in _PRIVATE_NETWORKS:
@@ -127,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--allow-private",
         action="store_true",
-        help="Allow private IPs (e.g., localhost, LAN) - NOT recommended for production"
+        help="Allow private IPs (e.g., localhost, LAN) - NOT recommended for production",
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("health")

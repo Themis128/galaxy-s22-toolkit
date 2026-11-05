@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 REPO = Path(__file__).resolve().parents[1]
 
 if TYPE_CHECKING:
+
     def analyze(conn: sqlite3.Connection) -> dict[str, Any]: ...
     def newest_backup() -> Path | None: ...
     def security_patch_age() -> dict[str, Any]: ...
@@ -31,12 +32,16 @@ else:
     try:
         from insights import analyze, newest_backup, security_patch_age
     except ImportError:
+
         def analyze(conn: sqlite3.Connection) -> dict[str, Any]:
             return {"insights": []}
+
         def newest_backup() -> Path | None:
             return None
+
         def security_patch_age() -> dict[str, Any]:
             return {"verdict": "NO DATA"}
+
 
 SEVERITY_ORDER = {"info": 0, "warning": 1, "critical": 2}
 

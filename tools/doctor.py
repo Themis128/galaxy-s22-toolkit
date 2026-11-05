@@ -31,14 +31,18 @@ else:
         sys.path.insert(0, str(REPO / "tools"))
     try:
         from clean_path_artifacts import find_artifacts
-        from fix_onedrive_attrs import find_readonly, clear_flags
+        from fix_onedrive_attrs import clear_flags, find_readonly
     except ImportError:
+
         def find_artifacts(root: Path) -> list[Path]:
             return []
+
         def find_readonly(root: Path) -> list[Path]:
             return []
+
         def clear_flags(files: list[Path]) -> int:
             return 0
+
 
 failures = 0
 
@@ -154,8 +158,10 @@ def main() -> int:
             from clean_path_artifacts import find_artifacts as fa  # type: ignore[import-not-found]
             from fix_onedrive_attrs import clear_flags  # type: ignore[import-not-found]
         except ImportError:
+
             def fa(root: Path) -> list[Path]:
                 return []
+
             def clear_flags(files: list[Path]) -> int:
                 return 0
 

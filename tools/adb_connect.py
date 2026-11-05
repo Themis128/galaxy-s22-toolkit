@@ -15,13 +15,17 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
+
+if TYPE_CHECKING:
+    from phone.adb import AdbClient
 
 REPO = Path(__file__).resolve().parents[1]
 
 
-def load_wireless() -> dict | None:
+def load_wireless() -> dict[str, object] | None:
     cfg = REPO / "diagnostics" / "config.yaml"
     if not cfg.exists():
         return None
@@ -29,7 +33,7 @@ def load_wireless() -> dict | None:
     return (data.get("device") or {}).get("wireless_adb")
 
 
-def make_client(serial: str | None = None):
+def make_client(serial: str | None = None) -> AdbClient:
     from phone import create_client
 
     c = create_client(serial=serial, wireless=load_wireless())

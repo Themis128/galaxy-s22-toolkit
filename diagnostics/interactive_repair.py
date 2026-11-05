@@ -18,10 +18,9 @@ from typing import Any
 # Add phone-lib to path (must be before imports)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "phone-lib" / "src"))
-sys.path.insert(0, str(PROJECT_ROOT / "diagnostics"))
+sys.path.insert(0, str(PROJECT_ROOT))
 
-from run_diagnostics import DiagnosticsRunner  # noqa: E402
-
+from diagnostics.run_diagnostics import DiagnosticsRunner  # noqa: E402
 from phone import create_client  # noqa: E402
 from phone.notify import DesktopNotifier  # noqa: E402
 from phone.repair import RepairAction, RepairModule, RepairResult  # noqa: E402
@@ -44,8 +43,8 @@ class InteractiveRepairCLI:
     def __init__(self, config_path: Path):
         self.config_path = config_path
         self.config = _load_yaml_config(config_path)
-        self.client = None
-        self.repair_module = None
+        self.client: Any = None  # AdbClient; set in initialize()
+        self.repair_module: RepairModule | None = None
         self.notifier: DesktopNotifier | None = None
         self.diagnostics_results: list[dict[str, Any]] = []
         self.pending_actions: list[RepairAction] = []
@@ -216,6 +215,9 @@ class InteractiveRepairCLI:
         if not selected:
             print("No valid actions selected.")
             return []
+        if not self.repair_module:
+            print("Repair module not initialized.")
+            return []
 
         print(f"\n🚀 Executing {len(selected)} repair action(s)...\n")
 
@@ -327,7 +329,7 @@ class InteractiveRepairCLI:
         print("=" * 80)
 
 
-async def main():
+async def main() -> None:
     config_path = PROJECT_ROOT / "diagnostics" / "config.yaml"
     cli = InteractiveRepairCLI(config_path)
     await cli.run_interactive()

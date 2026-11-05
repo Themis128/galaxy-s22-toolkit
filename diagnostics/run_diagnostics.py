@@ -17,60 +17,29 @@ import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import yaml
-
-if TYPE_CHECKING:
-    from phone import (
-        AppsModule,
-        BatteryModule,
-        DeviceModule,
-        LogcatModule,
-        NetworkModule,
-        StorageModule,
-        ThermalModule,
-        create_client,
-    )
-    from phone.models import (
-        BatteryHealth,
-        HealthReport,
-        LogLevel,
-    )
 
 # Add phone-lib to path for runtime
 sys.path.insert(0, str(Path(__file__).parent.parent / "phone-lib" / "src"))
 
-# Runtime imports (phone lacks stubs)
-try:
-    from phone import (
-        AppsModule,
-        BatteryModule,
-        DeviceModule,
-        LogcatModule,
-        NetworkModule,
-        StorageModule,
-        ThermalModule,
-        create_client,
-    )
-    from phone.models import (
-        BatteryHealth,
-        HealthReport,
-        LogLevel,
-    )
-except ImportError:
-    # Fallback for type checking only
-    AppsModule = Any
-    BatteryModule = Any
-    DeviceModule = Any
-    LogcatModule = Any
-    NetworkModule = Any
-    StorageModule = Any
-    ThermalModule = Any
-    create_client = Any
-    BatteryHealth = Any
-    HealthReport = Any
-    LogLevel = Any
+# Runtime imports (py.typed marker added in phone-lib)
+from phone import (
+    AppsModule,
+    BatteryModule,
+    DeviceModule,
+    LogcatModule,
+    NetworkModule,
+    StorageModule,
+    ThermalModule,
+    create_client,
+)
+from phone.models import (
+    BatteryHealth,
+    HealthReport,
+    LogLevel,
+)
 
 
 @dataclass
@@ -105,7 +74,7 @@ class DiagnosticsRunner:
     def __init__(self, config_path: Path):
         self.config_path = config_path
         self.config = self._load_config()
-        self.client = None
+        self.client: Any = None  # AdbClient; set by _create_client()
         self.results: list[CheckResult] = []
         self.start_time = datetime.now()
         self.output_root = Path(__file__).resolve().parent
@@ -150,7 +119,9 @@ class DiagnosticsRunner:
         if wireless:
             wireless = {**wireless, "preferred_serial": device_cfg.get("serial")}
         self.client = create_client(wireless=wireless, adb_path=adb_path)
-        self.logger.info(f"Connected to device: {getattr(self.client, 'serial', None) or 'auto-detect'}")
+        self.logger.info(
+            f"Connected to device: {getattr(self.client, 'serial', None) or 'auto-detect'}"
+        )
 
     def _run_check(self, name: str, check_func: Any, *args: Any, **kwargs: Any) -> CheckResult:
         """Run a single check with timing and error handling."""
@@ -329,7 +300,7 @@ class DiagnosticsRunner:
 
         thresholds = self.config.thresholds["thermal"]
 
-        details = {
+        details: dict[str, Any] = {
             "zones": [],
             "cpu_throttling": info.cpu_throttled,
             "gpu_throttling": info.gpu_throttled,
@@ -515,7 +486,7 @@ class DiagnosticsRunner:
         """Check app status."""
         apps = AppsModule(self.client)
 
-        details = {}
+        details: dict[str, Any] = {}
 
         # Get running apps
         running = apps.get_running_apps()
@@ -697,6 +668,10 @@ class DiagnosticsRunner:
 
     def format_summary(self, report: HealthReport) -> str:
         """Format human-readable summary."""
+        assert report.device is not None, "report.device must be populated"
+        assert report.battery is not None, "report.battery must be populated"
+        assert report.network is not None, "report.network must be populated"
+        assert report.thermal is not None, "report.thermal must be populated"
         lines = [
             "=" * 60,
             f"Galaxy S22+ Health Report - {report.timestamp.strftime('%Y-%m-%d %H:%M:%S')}",
@@ -787,7 +762,7 @@ class DiagnosticsRunner:
             import sys as _sys
 
             _sys.path.insert(0, str(self.output_root.parent / "phone-lib" / "src"))
-            from phone.notify import DesktopNotifier  # type: ignore[import-untyped]
+            from phone.notify import DesktopNotifier
 
             notifier = DesktopNotifier(app_id="Galaxy S22+ Diagnostics")
             if report.overall_status == "healthy":
@@ -817,6 +792,9 @@ class DiagnosticsRunner:
 
         try:
             import requests
+
+            assert report.device is not None and report.battery is not None
+            assert report.network is not None and report.thermal is not None
 
             # Determine color based on status
             colors = {"healthy": 0x00FF00, "warning": 0xFFFF00, "critical": 0xFF0000}
