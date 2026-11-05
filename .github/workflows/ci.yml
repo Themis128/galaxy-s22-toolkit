@@ -25,7 +25,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
       - name: Install dependencies
         run: |
-          uv pip install --system ruff mypy pytest pytest-asyncio fastapi types-PyYAML
+          uv pip install --system ruff mypy pytest pytest-asyncio fastapi uvicorn types-PyYAML
           cd phone-lib && uv pip install --system -e ".[dev]"
       - name: Ruff check
         run: ruff check phone-lib diagnostics dashboard tools
