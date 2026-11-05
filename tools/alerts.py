@@ -42,13 +42,15 @@ def evaluate(insights: list[dict[str, Any]]) -> list[dict[str, Any]]:
         message = f"{metric}: {value} {unit}".strip()
         if eta is not None:
             message += f" - full in ~{eta} days"
-        alerts.append({
-            "id": metric,
-            "severity": "critical" if verdict == "ACT" else "warning",
-            "source": "insights",
-            "message": message,
-            "recommendation": _recommendation(metric),
-        })
+        alerts.append(
+            {
+                "id": metric,
+                "severity": "critical" if verdict == "ACT" else "warning",
+                "source": "insights",
+                "message": message,
+                "recommendation": _recommendation(metric),
+            }
+        )
     return alerts
 
 

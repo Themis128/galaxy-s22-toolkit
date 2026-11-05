@@ -457,9 +457,7 @@ async def alerts_page(request: Request):
 def _load_tool(name: str):
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location(
-        name, PROJECT_ROOT / "tools" / f"{name}.py"
-    )
+    spec = importlib.util.spec_from_file_location(name, PROJECT_ROOT / "tools" / f"{name}.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -484,22 +482,26 @@ async def api_alerts():
         from datetime import date
 
         patch = _ensure_client().device.get_security_patch()
-        patch_days = (date.today()
-                      - datetime.strptime(patch[:10], "%Y-%m-%d").date()).days
-        insights.append({
-            "metric": "security patch age", "value": patch_days,
-            "unit": f"days (patch {patch[:10]})",
-            "verdict": ("OK" if patch_days < 60 else
-                        "WATCH" if patch_days <= 90 else "ACT"),
-        })
+        patch_days = (date.today() - datetime.strptime(patch[:10], "%Y-%m-%d").date()).days
+        insights.append(
+            {
+                "metric": "security patch age",
+                "value": patch_days,
+                "unit": f"days (patch {patch[:10]})",
+                "verdict": ("OK" if patch_days < 60 else "WATCH" if patch_days <= 90 else "ACT"),
+            }
+        )
     except Exception as exc:
         logger.warning("alerts: patch age unavailable: %s", exc)
-    return JSONResponse({
-        "alerts": alerts_mod.evaluate(insights),
-        "generated": insights_mod.datetime.now(
-            insights_mod.timezone.utc
-        ).replace(tzinfo=None).isoformat() + "Z",
-    })
+    return JSONResponse(
+        {
+            "alerts": alerts_mod.evaluate(insights),
+            "generated": insights_mod.datetime.now(insights_mod.timezone.utc)
+            .replace(tzinfo=None)
+            .isoformat()
+            + "Z",
+        }
+    )
 
 
 @app.get("/api/insights")

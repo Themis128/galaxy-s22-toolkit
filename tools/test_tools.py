@@ -149,8 +149,7 @@ class TestAlertEvaluator:
     def test_act_becomes_critical(self):
         from alerts import evaluate
 
-        item = {"metric": "security patch age", "value": 92,
-                "unit": "days", "verdict": "ACT"}
+        item = {"metric": "security patch age", "value": 92, "unit": "days", "verdict": "ACT"}
         alerts = evaluate([item])
         assert len(alerts) == 1
         assert alerts[0]["severity"] == "critical"
@@ -159,13 +158,14 @@ class TestAlertEvaluator:
     def test_watch_becomes_warning(self):
         from alerts import evaluate
 
-        item = {"metric": "battery drain rate", "value": 14.5,
-                "unit": "%/h", "verdict": "WATCH"}
+        item = {"metric": "battery drain rate", "value": 14.5, "unit": "%/h", "verdict": "WATCH"}
         assert evaluate([item])[0]["severity"] == "warning"
 
     def test_ok_and_no_data_are_silent(self):
         from alerts import evaluate
 
-        items = [{"metric": "m", "value": 1.0, "verdict": "OK"},
-                 {"metric": "n", "value": None, "verdict": "NO DATA"}]
+        items = [
+            {"metric": "m", "value": 1.0, "verdict": "OK"},
+            {"metric": "n", "value": None, "verdict": "NO DATA"},
+        ]
         assert evaluate(items) == []
