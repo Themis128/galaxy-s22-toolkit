@@ -9,6 +9,7 @@ the detected model (multi-Galaxy compatibility).
 from __future__ import annotations
 
 import sys
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,8 @@ ROOT = Path(__file__).resolve().parents[2]
 for _p in (str(ROOT), str(ROOT / "phone-lib" / "src")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
+
+from collections.abc import Iterator  # noqa: E402
 
 from diagnostics import run_diagnostics as rd  # noqa: E402
 from phone.models import (  # noqa: E402
@@ -127,9 +130,18 @@ def make_runner(tmp_path: Path) -> rd.DiagnosticsRunner:
     return runner
 
 
-def run_with_mocks(runner: rd.DiagnosticsRunner, modules: dict[str, Any]) -> None:
+@contextmanager
+def mocked_device(runner: rd.DiagnosticsRunner, modules: dict[str, Any]) -> Iterator[None]:
+    """Patch every phone-module constructor AND _create_client for the whole
+    runner flow.
+
+    generate_report() builds fresh module instances, so checks AND report
+    generation must both run inside this context or the real AdbClient is
+    constructed and the tests silently depend on a live device.
+    """
     runner.client = make_device_client()
     with (
+        patch.object(runner, "_create_client", lambda: None),
         patch.object(rd, "DeviceModule", return_value=modules["DeviceModule"]),
         patch.object(rd, "BatteryModule", return_value=modules["BatteryModule"]),
         patch.object(rd, "NetworkModule", return_value=modules["NetworkModule"]),
@@ -138,13 +150,14 @@ def run_with_mocks(runner: rd.DiagnosticsRunner, modules: dict[str, Any]) -> Non
         patch.object(rd, "LogcatModule", return_value=modules["LogcatModule"]),
         patch.object(rd, "AppsModule", return_value=modules["AppsModule"]),
     ):
-        runner.run_all_checks()
+        yield
 
 
 class TestRunnerChecks:
     def test_all_checks_pass_no_error(self, tmp_path: Path) -> None:
         runner = make_runner(tmp_path)
-        run_with_mocks(runner, patch_modules())
+        with mocked_device(runner, patch_modules()):
+            runner.run_all_checks()
         assert len(runner.results) == 7
         statuses = {r.status for r in runner.results}
         assert "error" not in statuses
@@ -153,8 +166,9 @@ class TestRunnerChecks:
     def test_summary_brands_from_detected_model(self, tmp_path: Path) -> None:
         """Multi-Galaxy: report header derives from the model, not a constant."""
         runner = make_runner(tmp_path)
-        run_with_mocks(runner, patch_modules())
-        report = runner.generate_report()
+        with mocked_device(runner, patch_modules()):
+            runner.run_all_checks()
+            report = runner.generate_report()
         summary = runner.format_summary(report)
         assert "Galaxy S22+ (SM-S906B)" in summary
         assert "Galaxy S22+ Health Report" not in summary  # old hardcode gone
@@ -197,7 +211,8 @@ class TestRunnerChecks:
             "stats": {"false_positives": 0, "total": 0, "filter_rate": 0.0},
         }
         runner = make_runner(tmp_path)
-        run_with_mocks(runner, modules)
+        with mocked_device(runner, modules):
+            runner.run_all_checks()
         statuses = {r.status for r in runner.results}
         assert "error" not in statuses
 
@@ -205,8 +220,9 @@ class TestRunnerChecks:
         import json
 
         runner = make_runner(tmp_path)
-        run_with_mocks(runner, patch_modules())
-        report = runner.generate_report()
+        with mocked_device(runner, patch_modules()):
+            runner.run_all_checks()
+            report = runner.generate_report()
         payload = json.dumps(
             {**runner.__dict__, "report_timestamp": datetime.now().isoformat()},
             default=str,
