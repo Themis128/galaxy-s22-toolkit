@@ -135,18 +135,18 @@ def storage_growth(conn: sqlite3.Connection, days: int = 14) -> dict[str, Any]:
     }
 
 
-def _daily_means(series):
+def _daily_means(series: list[tuple[datetime, float]]) -> list[tuple[datetime, float]]:
     """One mean value per calendar day (drops within-day slope noise)."""
-    buckets = {}
+    buckets: dict[str, list[float]] = {}
     for ts, v in series:
         buckets.setdefault(ts.strftime("%Y-%m-%d"), []).append(v)
-    out = []
+    out: list[tuple[datetime, float]] = []
     for day in sorted(buckets):
         out.append((datetime.strptime(day, "%Y-%m-%d"), statistics.mean(buckets[day])))
     return out
 
 
-def _storage_metric(conn: sqlite3.Connection, field: str, days: int):
+def _storage_metric(conn: sqlite3.Connection, field: str, days: int) -> list[tuple[datetime, float]]:
     """Time series of a field from the /data entry of the storage array."""
     cutoff = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)).isoformat()
     rows = conn.execute(

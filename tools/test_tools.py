@@ -106,7 +106,7 @@ class TestDashboardClient:
     def test_repair_requires_confirm(self):
         from dashboard_client import main
 
-        rc = main(["--base-url", "http://127.0.0.1:1", "repair", "clear_app_caches"])
+        rc = main(["--allow-private", "--base-url", "http://127.0.0.1:1", "repair", "clear_app_caches"])
         assert rc == 2
 
 

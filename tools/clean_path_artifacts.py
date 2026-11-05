@@ -17,12 +17,12 @@ import os
 import sys
 from pathlib import Path
 
-ARTIFACT_CHAR = ""
+ARTIFACT_CHAR = "\uF03A"
 
 
-def find_artifacts(root):
+def find_artifacts(root: Path) -> list[Path]:
     """Return files whose name contains the mangled-path marker char."""
-    found = []
+    found: list[Path] = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d != ".git"]
         for name in filenames:
@@ -31,7 +31,7 @@ def find_artifacts(root):
     return found
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("root", nargs="?", default=str(Path(__file__).resolve().parents[1]))
     parser.add_argument("--delete", action="store_true", help="delete the junk files")

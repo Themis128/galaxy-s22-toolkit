@@ -17,14 +17,70 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
+import socket
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_BASE = "http://localhost:8081"
+
+# Private/internal IP ranges to block for SSRF protection.
+# 100.64.0.0/10 (CGNAT, includes Tailscale 100.x.x.x) is ALLOWED.
+_PRIVATE_NETWORKS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),  # link-local
+    ipaddress.ip_network("::1/128"),  # IPv6 loopback
+    ipaddress.ip_network("fc00::/7"),  # IPv6 ULA
+]
+
+
+def _validate_base_url(base_url: str, allow_private: bool = False) -> None:
+    """Validate base URL against SSRF: block private/internal IPs.
+
+    Tailscale CGNAT (100.64.0.0/10) is explicitly allowed.
+    """
+    if not base_url.lower().startswith(("http://", "https://")):
+        raise ValueError("--base-url must use http:// or https://")
+
+    parsed = urllib.parse.urlparse(base_url)
+    host = parsed.hostname or ""
+    if not host:
+        raise ValueError("--base-url must include a hostname")
+
+    # Resolve host to IPs (A + AAAA)
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror as e:
+        raise ValueError(f"could not resolve {host}: {e}") from e
+
+    for info in infos:
+        ip_str = info[4][0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            continue
+        # Allow Tailscale CGNAT (100.64.0.0/10) - only for IPv4
+        if ip.version == 4:
+            if ipaddress.IPv4Address("100.64.0.0") <= ip <= ipaddress.IPv4Address("100.127.255.255"):
+                continue
+        # Block other private ranges
+        for net in _PRIVATE_NETWORKS:
+            if ip in net:
+                if allow_private:
+                    continue
+                raise ValueError(
+                    f"--base-url resolves to private IP {ip_str} ({host}); "
+                    "use --allow-private to override (not recommended)"
+                )
 
 
 def load_api_key() -> str | None:
@@ -37,8 +93,8 @@ def load_api_key() -> str | None:
 
 
 def request(
-    base: str, path: str, key: str | None, method: str = "GET", body: dict | None = None
-) -> tuple[int, dict]:
+    base: str, path: str, key: str | None, method: str = "GET", body: dict[str, Any] | None = None
+) -> tuple[int, dict[str, Any]]:
     req = urllib.request.Request(base.rstrip("/") + path, method=method)
     if key:
         req.add_header("X-API-Key", key)
@@ -58,7 +114,7 @@ def request(
         raise SystemExit(f"dashboard unreachable at {base}: {e.reason}") from e
 
 
-def print_result(label: str, status: int, payload: dict) -> int:
+def print_result(label: str, status: int, payload: dict[str, Any]) -> int:
     print(f"[{status}] {label}")
     print(json.dumps(payload, indent=2)[:2000])
     return 0 if status < 400 else 1
@@ -68,6 +124,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--base-url", default=DEFAULT_BASE)
     parser.add_argument("--key", default=None, help="API key (default: .env)")
+    parser.add_argument(
+        "--allow-private",
+        action="store_true",
+        help="Allow private IPs (e.g., localhost, LAN) - NOT recommended for production"
+    )
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("health")
     sub.add_parser("metrics")
@@ -86,9 +147,7 @@ def main(argv: list[str] | None = None) -> int:
         "--confirm", action="store_true", help="required to execute; without it the call is refused"
     )
     args = parser.parse_args(argv)
-    if not args.base_url.lower().startswith(("http://", "https://")):
-        print("--base-url must use http:// or https://", file=sys.stderr)
-        return 2
+    _validate_base_url(args.base_url, allow_private=args.allow_private)
     key = args.key or load_api_key()
 
     if args.cmd == "health":

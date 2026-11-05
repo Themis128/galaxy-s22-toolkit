@@ -14,15 +14,16 @@ from __future__ import annotations
 import argparse
 from datetime import date, datetime
 from pathlib import Path
+from typing import Any
 
 import yaml
 
 REPO = Path(__file__).resolve().parents[1]
 
 
-def load_client():
+def load_client() -> object:  # phone.Client type, but phone lacks stubs
     """Connect like production: diagnostics/config.yaml wireless settings."""
-    from phone import create_client
+    from phone import create_client  # type: ignore[import-untyped]
 
     wireless = None
     cfg = REPO / "diagnostics" / "config.yaml"
@@ -44,11 +45,11 @@ def verdict_for_age(days: int) -> str:
     return "OUTDATED"
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--open-settings", action="store_true", help="open the update screen")
-    args = parser.parse_args()
-    c = load_client()
+    args = parser.parse_args(argv)
+    c: Any = load_client()
     info = c.device.get_device_info()
     patch = info.security_patch
     try:

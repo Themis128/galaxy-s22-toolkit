@@ -7,6 +7,7 @@ import json
 import logging
 import sqlite3
 import threading
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -79,7 +80,7 @@ class MetricsDB:
         """Get thread-local connection."""
         if not hasattr(self._local, "conn"):
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
-            conn = sqlite3.connect(
+            conn: sqlite3.Connection = sqlite3.connect(
                 self.db_path,
                 timeout=30.0,
                 check_same_thread=False,
@@ -91,10 +92,10 @@ class MetricsDB:
             conn.execute("PRAGMA busy_timeout=5000")
             conn.execute("PRAGMA cache_size=-8192")  # 8MB cache
             self._local.conn = conn
-        return self._local.conn
+        return self._local.conn  # type: ignore[return-value]
 
     @contextmanager
-    def transaction(self):
+    def transaction(self) -> Generator[sqlite3.Connection, None, None]:
         """Context manager for explicit transactions."""
         conn = self._get_conn()
         try:
@@ -185,9 +186,9 @@ class MetricsDB:
 
     # --- Aggregation helpers ---
 
-    def _flatten_metrics(self, obj: dict, prefix: str = "") -> dict[str, float]:
+    def _flatten_metrics(self, obj: dict[str, Any], prefix: str = "") -> dict[str, float]:
         """Extract all scalar numeric values from a nested dict, dot-notation keys."""
-        out = {}
+        out: dict[str, float] = {}
         for k, v in obj.items():
             path = f"{prefix}.{k}" if prefix else k
             if isinstance(v, (int, float)):
@@ -221,7 +222,7 @@ class MetricsDB:
             # Group by hour
             from collections import defaultdict
 
-            hourly: dict[str, list[dict]] = defaultdict(list)
+            hourly: dict[str, list[dict[str, Any]]] = defaultdict(list)
             for r in rows:
                 ts = r["ts_utc"]
                 # Normalize to space format: YYYY-MM-DD HH:00:00
@@ -380,7 +381,7 @@ class MetricsDB:
                 "SELECT device_json FROM snapshots WHERE ts_utc >= ? ORDER BY ts_utc DESC LIMIT 10",
                 (cutoff,),
             )
-            paths = set()
+            paths: set[str] = set()
             for r in cur.fetchall():
                 data = json.loads(r["device_json"])
                 paths.update(self._flatten_metrics(data).keys())
