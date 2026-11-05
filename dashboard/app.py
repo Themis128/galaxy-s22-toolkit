@@ -8,9 +8,14 @@ import logging
 import os
 import subprocess
 import sys
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from phone import create_client
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 # Repo root must be importable for `from dashboard.metrics_db import ...`
@@ -35,7 +40,11 @@ from fastapi.templating import Jinja2Templates  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 from dashboard.metrics_db import get_metrics_db, init_metrics_db  # noqa: E402
-from phone import create_client  # noqa: E402
+
+if TYPE_CHECKING:
+    from phone import create_client
+else:
+    from phone import create_client  # type: ignore[import-untyped]
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -59,26 +68,27 @@ TAILSCALE_ALLOWLIST = [ip.strip() for ip in TAILSCALE_ALLOWLIST if ip.strip()]
 # Devin working directory (can be overridden via env)
 DEVIN_WORKDIR = Path(os.getenv("DEVIN_WORKDIR", str(Path.home() / "Devin")))
 
-manager = None
-client = None
-history: list[dict] = []
+manager: ConnectionManager | None = None
+client: Any = None  # PhoneClient type but no stubs
+history: list[dict[str, Any]] = []
 
 
 async def verify_api_key(
     api_key: str = Depends(api_key_header),
     x_forwarded_for: str | None = Header(None),
-    request: Request = None,
+    request: Request = None,  # type: ignore[assignment]
 ) -> str:
     """Verify API key and optionally Tailscale IP allowlist."""
     if api_key != GROQ_BOT_API_KEY:
+        client_host = request.client.host if request and request.client else "unknown"
         logger.warning(
-            "Invalid API key attempt from %s", request.client.host if request.client else "unknown"
+            "Invalid API key attempt from %s", client_host
         )
         raise HTTPException(status_code=401, detail="Invalid API key")
 
     # Check Tailscale allowlist if configured
     if TAILSCALE_ALLOWLIST:
-        client_ip = request.client.host if request.client else ""
+        client_ip = request.client.host if request and request.client else ""
         # Also check X-Forwarded-For for reverse proxy scenarios
         if x_forwarded_for:
             client_ip = x_forwarded_for.split(",")[0].strip()
@@ -121,7 +131,7 @@ class ConnectionManager:
             self.active.remove(websocket)
         logger.info("Client disconnected (total %d)", len(self.active))
 
-    async def broadcast(self, message: dict) -> None:
+    async def broadcast(self, message: dict[str, Any]) -> None:
         dead = []
         for ws in self.active:
             try:
@@ -132,12 +142,7 @@ class ConnectionManager:
             self.disconnect(ws)
 
 
-manager = ConnectionManager()
-client = None
-history: list[dict] = []
-
-
-def _device_wireless_settings() -> dict | None:
+def _device_wireless_settings() -> dict[str, Any] | None:
     """device.wireless_adb from diagnostics/config.yaml (host-side fallback)."""
     try:
         import yaml
@@ -152,7 +157,7 @@ def _device_wireless_settings() -> dict | None:
         return None
 
 
-def _ensure_client():
+def _ensure_client() -> Any:
     """Return a live phone client, reconnecting when the transport dropped.
 
     Wireless ADB transports die silently (phone TCP listener reset, network
@@ -172,7 +177,7 @@ def _ensure_client():
     return client
 
 
-def _collect_once() -> dict:
+def _collect_once() -> dict[str, Any]:
     """One blocking collection pass (runs in a worker thread)."""
     global client
     client = _ensure_client()
@@ -288,7 +293,8 @@ async def collector_loop() -> None:
             history.append(metrics)
             if len(history) > MAX_HISTORY:
                 del history[: len(history) - MAX_HISTORY]
-            await manager.broadcast({"type": "metrics", "data": metrics})
+            if manager is not None:
+                await manager.broadcast({"type": "metrics", "data": metrics})
             # Persist to SQLite (non-blocking in executor)
             await loop.run_in_executor(None, db.insert_snapshot, metrics)
         except ConnectionError:
@@ -306,7 +312,7 @@ async def collector_loop() -> None:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Start/stop the background collector around the app lifetime."""
     # Initialize metrics database
     init_metrics_db(max_snapshots=MAX_DB_SNAPSHOTS)
@@ -332,13 +338,13 @@ if STATIC_DIR.exists():
 
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
+async def dashboard(request: Request) -> HTMLResponse:
     """Main dashboard page."""
     return templates.TemplateResponse(request, "dashboard.html")
 
 
 @app.get("/api/health")
-async def api_health():
+async def api_health() -> JSONResponse:
     """Current snapshot (triggers a fresh collection)."""
     loop = asyncio.get_running_loop()
     try:
@@ -353,7 +359,7 @@ async def api_health():
 
 
 @app.get("/api/history")
-async def api_history(hours: int = 24):
+async def api_history(hours: int = 24) -> JSONResponse:
     """Time-series of stored snapshots."""
     cutoff = datetime.now() - timedelta(hours=hours)
     out = []
@@ -367,7 +373,7 @@ async def api_history(hours: int = 24):
 
 
 @app.get("/api/history/{metric}")
-async def api_history_metric(metric: str, hours: int = 24):
+async def api_history_metric(metric: str, hours: int = 24) -> JSONResponse:
     """Time-series of one metric section."""
     cutoff = datetime.now() - timedelta(hours=hours)
     out = []
@@ -384,7 +390,7 @@ async def api_history_metric(metric: str, hours: int = 24):
 
 
 @app.get("/api/trends/metrics")
-async def api_trends_metrics(hours: int = 24):
+async def api_trends_metrics(hours: int = 24) -> JSONResponse:
     """List metric paths that have persisted data in the window."""
     db = get_metrics_db()
     try:
@@ -398,7 +404,7 @@ async def api_trends_metrics(hours: int = 24):
 
 
 @app.get("/api/trends/hourly/{metric_path:path}")
-async def api_trends_hourly(metric_path: str, hours: int = 24):
+async def api_trends_hourly(metric_path: str, hours: int = 24) -> JSONResponse:
     """Hourly averaged trend for a metric (dot-notation path, e.g. battery.level)."""
     db = get_metrics_db()
     try:
@@ -412,7 +418,7 @@ async def api_trends_hourly(metric_path: str, hours: int = 24):
 
 
 @app.get("/api/trends/daily/{metric_path:path}")
-async def api_trends_daily(metric_path: str, days: int = 30):
+async def api_trends_daily(metric_path: str, days: int = 30) -> JSONResponse:
     """Daily averaged trend for a metric."""
     db = get_metrics_db()
     try:
@@ -426,7 +432,7 @@ async def api_trends_daily(metric_path: str, days: int = 30):
 
 
 @app.get("/api/trends/stats/{metric_path:path}")
-async def api_trends_stats(metric_path: str, hours: int = 24):
+async def api_trends_stats(metric_path: str, hours: int = 24) -> JSONResponse:
     """Min/max/avg/count stats for a metric over the window."""
     db = get_metrics_db()
     try:
@@ -440,7 +446,7 @@ async def api_trends_stats(metric_path: str, hours: int = 24):
 
 
 @app.post("/api/trends/rollup")
-async def api_trends_rollup(hours_back: int = 2, days_back: int = 2):
+async def api_trends_rollup(hours_back: int = 2, days_back: int = 2) -> JSONResponse:
     """Manually trigger hourly/daily rollup computation."""
     db = get_metrics_db()
     try:
@@ -457,7 +463,7 @@ async def api_trends_rollup(hours_back: int = 2, days_back: int = 2):
 
 
 @app.get("/alerts", response_class=HTMLResponse)
-async def alerts_page(request: Request):
+async def alerts_page(request: Request) -> HTMLResponse:
     """Human-readable alert board (severity-sorted, auto-refresh)."""
     import sqlite3
 
@@ -490,17 +496,19 @@ async def alerts_page(request: Request):
     return templates.TemplateResponse(request, "alerts.html", {"alerts": alerts})
 
 
-def _load_tool(name: str):
+def _load_tool(name: str) -> Any:
     import importlib.util
 
     spec = importlib.util.spec_from_file_location(name, PROJECT_ROOT / "tools" / f"{name}.py")
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load module {name}")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
 
 
 @app.get("/api/alerts")
-async def api_alerts():
+async def api_alerts() -> JSONResponse:
     """Active alerts from the current metrics history (stateless)."""
     import sqlite3
 
@@ -541,7 +549,7 @@ async def api_alerts():
 
 
 @app.get("/api/insights")
-async def api_insights():
+async def api_insights() -> JSONResponse:
     """Degradation insights computed from the raw history."""
     import importlib.util
     import sqlite3
@@ -549,6 +557,8 @@ async def api_insights():
     spec = importlib.util.spec_from_file_location(
         "insights", PROJECT_ROOT / "tools" / "insights.py"
     )
+    if spec is None or spec.loader is None:
+        raise ImportError("Could not load insights module")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     db = get_metrics_db()
@@ -561,8 +571,10 @@ async def api_insights():
 
 
 @app.websocket("/ws/live")
-async def ws_live(websocket: WebSocket):
+async def ws_live(websocket: WebSocket) -> None:
     """Live updates: initial snapshot, then collector broadcasts."""
+    if manager is None:
+        return
     await manager.connect(websocket)
     try:
         loop = asyncio.get_running_loop()
@@ -574,14 +586,16 @@ async def ws_live(websocket: WebSocket):
         while True:
             await websocket.receive_text()  # keepalive pings from the client
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        if manager is not None:
+            manager.disconnect(websocket)
     except Exception as exc:  # noqa: BLE001 - never crash the WS handler
         logger.error("WebSocket error: %s", exc)
-        manager.disconnect(websocket)
+        if manager is not None:
+            manager.disconnect(websocket)
 
 
 @app.post("/api/diagnostics/run")
-async def api_diagnostics_run():
+async def api_diagnostics_run() -> JSONResponse:
     """Trigger a full diagnostics run via DiagnosticsRunner."""
     from diagnostics.run_diagnostics import DiagnosticsRunner
 
@@ -600,7 +614,7 @@ class RepairActionRequest(BaseModel):
     """Request model for repair action execution."""
 
     action_name: str
-    kwargs: dict = {}
+    kwargs: dict[str, Any] = {}
     # Non-auto-approve actions require explicit confirmation from the UI
     confirm: bool = False
 
@@ -609,7 +623,7 @@ class RepairMultipleRequest(BaseModel):
     """Request model for multiple repair actions."""
 
     action_names: list[str]
-    kwargs: dict = {}
+    kwargs: dict[str, Any] = {}
     confirm: bool = False
 
 
@@ -621,7 +635,7 @@ class RepairApprovalRequest(BaseModel):
 
 
 @app.get("/api/repair/actions")
-async def api_repair_actions():
+async def api_repair_actions() -> JSONResponse:
     """Get available repair actions, optionally filtered by diagnostics results."""
     from phone.repair import RepairModule
 
@@ -655,7 +669,7 @@ async def api_repair_actions():
     )
 
 
-def _latest_diagnostics_results() -> list[dict] | None:
+def _latest_diagnostics_results() -> list[dict[str, Any]] | None:
     """Load check results from the newest saved health report (or None)."""
     reports_dir = PROJECT_ROOT / "diagnostics" / "reports"
     try:
@@ -673,7 +687,7 @@ def _latest_diagnostics_results() -> list[dict] | None:
 
 
 @app.post("/api/repair/execute")
-async def api_repair_execute(request: RepairActionRequest):
+async def api_repair_execute(request: RepairActionRequest) -> JSONResponse:
     """Execute a single repair action."""
     from phone.repair import RepairModule
 
@@ -706,9 +720,9 @@ async def api_repair_execute(request: RepairActionRequest):
     return _repair_result_json(result)
 
 
-def _repair_result_json(result) -> dict:
+def _repair_result_json(result: Any) -> JSONResponse:
     """Serialize a RepairResult for API responses."""
-    return {
+    return JSONResponse({
         "action_name": result.action.name,
         "success": result.success,
         "message": result.message,
@@ -716,7 +730,7 @@ def _repair_result_json(result) -> dict:
         "duration_ms": result.duration_ms,
         "timestamp": result.timestamp.isoformat(),
         "requires_reboot": result.requires_reboot,
-    }
+    })
 
 
 def _repair_history_path() -> str | None:
@@ -732,7 +746,7 @@ def _repair_history_path() -> str | None:
         return None
 
 
-def _notify_repair_toast(result) -> None:
+def _notify_repair_toast(result: Any) -> None:
     """Fire a desktop toast for a completed repair (best-effort, non-blocking)."""
     try:
         from phone.notify import DesktopNotifier
@@ -749,7 +763,7 @@ def _notify_repair_toast(result) -> None:
 
 
 @app.post("/api/repair/execute-multiple")
-async def api_repair_execute_multiple(request: RepairMultipleRequest):
+async def api_repair_execute_multiple(request: RepairMultipleRequest) -> JSONResponse:
     """Execute multiple repair actions sequentially."""
     from phone.repair import RepairModule
 
@@ -787,7 +801,7 @@ async def api_repair_execute_multiple(request: RepairMultipleRequest):
 
 
 @app.get("/api/repair/history")
-async def api_repair_history():
+async def api_repair_history() -> JSONResponse:
     """Get repair action history (persisted JSONL)."""
     from phone.repair import RepairModule
 
@@ -808,7 +822,7 @@ async def api_repair_history():
 
 
 @app.get("/api/devin/status", dependencies=[Depends(verify_api_key)])
-async def devin_status():
+async def devin_status() -> JSONResponse:
     """Get Devin status - check if Devin processes are running."""
     try:
         # Check for Devin-related processes
@@ -844,7 +858,7 @@ async def devin_status():
 
 
 @app.post("/api/devin/execute", dependencies=[Depends(verify_api_key)])
-async def devin_execute(request: CommandRequest):
+async def devin_execute(request: CommandRequest) -> JSONResponse:
     """Execute a shell command in the Devin working directory."""
     workdir = Path(request.workdir) if request.workdir else DEVIN_WORKDIR
 
@@ -896,7 +910,7 @@ async def devin_execute(request: CommandRequest):
 
 
 @app.get("/api/devin/files", dependencies=[Depends(verify_api_key)])
-async def devin_list_files(path: str = "."):
+async def devin_list_files(path: str = ".") -> JSONResponse:
     """List files in Devin working directory."""
     target_path = (DEVIN_WORKDIR / path).resolve()
 
@@ -949,7 +963,7 @@ async def devin_list_files(path: str = "."):
 
 
 @app.get("/api/devin/files/read", dependencies=[Depends(verify_api_key)])
-async def devin_read_file(path: str):
+async def devin_read_file(path: str) -> JSONResponse:
     """Read a file from Devin working directory."""
     target_path = (DEVIN_WORKDIR / path).resolve()
 
@@ -992,7 +1006,7 @@ async def devin_read_file(path: str):
 
 
 @app.post("/api/devin/files/write", dependencies=[Depends(verify_api_key)])
-async def devin_write_file(request: FileRequest):
+async def devin_write_file(request: FileRequest) -> JSONResponse:
     """Write a file to Devin working directory."""
     target_path = (DEVIN_WORKDIR / request.path).resolve()
 
@@ -1033,7 +1047,7 @@ async def devin_write_file(request: FileRequest):
 
 
 @app.delete("/api/devin/files", dependencies=[Depends(verify_api_key)])
-async def devin_delete_file(path: str):
+async def devin_delete_file(path: str) -> JSONResponse:
     """Delete a file from Devin working directory."""
     target_path = (DEVIN_WORKDIR / path).resolve()
 
@@ -1072,7 +1086,7 @@ async def devin_delete_file(path: str):
 
 
 @app.get("/api/devin/logs", dependencies=[Depends(verify_api_key)])
-async def devin_logs(lines: int = 100):
+async def devin_logs(lines: int = 100) -> JSONResponse:
     """Get recent Devin logs from the working directory."""
     log_files = list(DEVIN_WORKDIR.rglob("*.log"))
 

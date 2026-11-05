@@ -17,28 +17,60 @@ import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
-# Add phone-lib to path
+if TYPE_CHECKING:
+    from phone import (
+        AppsModule,
+        BatteryModule,
+        DeviceModule,
+        LogcatModule,
+        NetworkModule,
+        StorageModule,
+        ThermalModule,
+        create_client,
+    )
+    from phone.models import (
+        BatteryHealth,
+        HealthReport,
+        LogLevel,
+    )
+
+# Add phone-lib to path for runtime
 sys.path.insert(0, str(Path(__file__).parent.parent / "phone-lib" / "src"))
 
-from phone import (
-    AppsModule,
-    BatteryModule,
-    DeviceModule,
-    LogcatModule,
-    NetworkModule,
-    StorageModule,
-    ThermalModule,
-    create_client,
-)
-from phone.models import (
-    BatteryHealth,
-    HealthReport,
-    LogLevel,
-)
+# Runtime imports (phone lacks stubs)
+try:
+    from phone import (
+        AppsModule,
+        BatteryModule,
+        DeviceModule,
+        LogcatModule,
+        NetworkModule,
+        StorageModule,
+        ThermalModule,
+        create_client,
+    )
+    from phone.models import (
+        BatteryHealth,
+        HealthReport,
+        LogLevel,
+    )
+except ImportError:
+    # Fallback for type checking only
+    AppsModule = Any
+    BatteryModule = Any
+    DeviceModule = Any
+    LogcatModule = Any
+    NetworkModule = Any
+    StorageModule = Any
+    ThermalModule = Any
+    create_client = Any
+    BatteryHealth = Any
+    HealthReport = Any
+    LogLevel = Any
 
 
 @dataclass
@@ -57,14 +89,14 @@ class CheckResult:
 class DiagnosticConfig:
     """Configuration loaded from config.yaml."""
 
-    device: dict
-    thresholds: dict
-    notifications: dict
-    schedule: dict
-    output: dict
-    advanced: dict
+    device: dict[str, Any]
+    thresholds: dict[str, Any]
+    notifications: dict[str, Any]
+    schedule: dict[str, Any]
+    output: dict[str, Any]
+    advanced: dict[str, Any]
     # Optional sections consumed by other components (CLI/dashboard repair)
-    repair: dict = field(default_factory=dict)
+    repair: dict[str, Any] = field(default_factory=dict)
 
 
 class DiagnosticsRunner:
@@ -94,7 +126,7 @@ class DiagnosticsRunner:
             log_path = self.output_root / log_config.get("path", "logs/diagnostics.log")
             log_path.parent.mkdir(parents=True, exist_ok=True)
 
-            handlers = [logging.FileHandler(log_path)]
+            handlers: list[logging.Handler] = [logging.FileHandler(log_path)]
             if sys.stdout is not None:  # None under pythonw (scheduled run)
                 handlers.append(logging.StreamHandler(sys.stdout))
             logging.basicConfig(
@@ -118,9 +150,9 @@ class DiagnosticsRunner:
         if wireless:
             wireless = {**wireless, "preferred_serial": device_cfg.get("serial")}
         self.client = create_client(wireless=wireless, adb_path=adb_path)
-        self.logger.info(f"Connected to device: {self.client.serial or 'auto-detect'}")
+        self.logger.info(f"Connected to device: {getattr(self.client, 'serial', None) or 'auto-detect'}")
 
-    def _run_check(self, name: str, check_func, *args, **kwargs) -> CheckResult:
+    def _run_check(self, name: str, check_func: Any, *args: Any, **kwargs: Any) -> CheckResult:
         """Run a single check with timing and error handling."""
         start = time.perf_counter()
         try:
@@ -243,7 +275,7 @@ class DiagnosticsRunner:
 
         thresholds = self.config.thresholds["storage"]
 
-        details = {
+        details: dict[str, Any] = {
             "partitions": [],
             "total_used_gb": 0,
             "total_free_gb": 0,
@@ -514,7 +546,7 @@ class DiagnosticsRunner:
 
         if self.config.advanced.get("parallel_checks", True):
             # Run checks in parallel using asyncio
-            async def run_async():
+            async def run_async() -> list[CheckResult]:
                 tasks = []
                 for name, func in checks:
                     tasks.append(asyncio.to_thread(self._run_check, name, func))
@@ -640,7 +672,7 @@ class DiagnosticsRunner:
         substituted = (
             str(template).replace("{{date}}", date_str).replace("{{timestamp}}", timestamp)
         )
-        return confined_path(self.output_root, self.output_root / substituted)
+        return Path(confined_path(self.output_root, self.output_root / substituted))
 
     def _cleanup_old_reports(self) -> None:
         """Remove reports older than retention_days."""
@@ -755,7 +787,7 @@ class DiagnosticsRunner:
             import sys as _sys
 
             _sys.path.insert(0, str(self.output_root.parent / "phone-lib" / "src"))
-            from phone.notify import DesktopNotifier
+            from phone.notify import DesktopNotifier  # type: ignore[import-untyped]
 
             notifier = DesktopNotifier(app_id="Galaxy S22+ Diagnostics")
             if report.overall_status == "healthy":
@@ -928,7 +960,7 @@ class DiagnosticsRunner:
             return 3
 
 
-def main():
+def main() -> int:
     """Main entry point."""
     config_path = Path(__file__).parent / "config.yaml"
 

@@ -93,6 +93,56 @@ bash galaxy-s22-toolkit-skills/install.sh
 
 Details: [ARCHITECTURE.md](ARCHITECTURE.md) (data flow, API contract, safety model).
 
+## PyPI Publishing (Trusted Publishing)
+
+The `phone-lib` package (`galaxy-s22-toolkit`) is published to PyPI using GitHub Actions with OIDC trusted publishing — no API tokens required.
+
+### One-time setup
+
+1. **Create the project on PyPI** (if not already):
+   - Go to <https://pypi.org/manage/projects/> → "Add project"
+   - Reserve the name `galaxy-s22-toolkit` (or your chosen name)
+   - Leave it empty — the first publish will create it
+
+2. **Configure trusted publisher** on PyPI:
+   - Go to your project → "Publishing" → "Add publisher"
+   - **PyPI project name**: `galaxy-s22-toolkit`
+   - **Owner**: your GitHub username/org (e.g., `tbaltzakis`)
+   - **Repository name**: `Galaxy S22+ (2)` (exact repo name)
+   - **Workflow name**: `publish.yml` (or `ci.yml` if combined)
+   - **Environment name**: `pypi` (optional but recommended)
+
+3. **Add GitHub Environment** (optional, for protection rules):
+   - Repo → Settings → Environments → New environment: `pypi`
+   - Add required reviewers, wait timers, or branch restrictions
+
+4. **Enable in GitHub Actions**:
+   - Set repository variable `ENABLE_PYPI = "true"` (Settings → Variables → Actions)
+   - The workflow `.github/workflows/publish.yml` only runs when this is set
+
+### Publishing flow
+
+```bash
+# Tag a version locally
+git tag v0.3.1
+git push origin v0.3.1
+```
+
+The `publish.yml` workflow:
+- Runs on tag push matching `v*`
+- Builds wheel with `pip wheel .`
+- Publishes via `pypa/gh-action-pypi-publish@release/v1` (OIDC)
+- Only executes when `ENABLE_PYPI=true`
+
+### Local test build
+
+```bash
+cd phone-lib
+pip install build
+python -m build --wheel
+# Inspect dist/galaxy_s22_toolkit-*.whl
+```
+
 ## License
 
 Personal project — no license.

@@ -92,7 +92,7 @@ class MetricsDB:
             conn.execute("PRAGMA busy_timeout=5000")
             conn.execute("PRAGMA cache_size=-8192")  # 8MB cache
             self._local.conn = conn
-        return self._local.conn  # type: ignore[return-value]
+        return self._local.conn  # type: ignore[no-any-return]
 
     @contextmanager
     def transaction(self) -> Generator[sqlite3.Connection, None, None]:
@@ -132,7 +132,7 @@ class MetricsDB:
                 (ts, json.dumps(snapshot, separators=(",", ":"))),
             )
             self._maybe_prune(conn)
-            return cur.lastrowid
+            return cur.lastrowid or 0
 
     def _maybe_prune(self, conn: sqlite3.Connection) -> None:
         """Keep only the most recent max_snapshots rows."""
