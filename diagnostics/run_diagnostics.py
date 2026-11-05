@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # ruff: noqa: T201  # CLI output requires print statements
 """
-Galaxy S22+ Diagnostics Automation Module
+Galaxy Diagnostics Automation Module
 
 Scheduled health check runner that uses the phone-lib to perform comprehensive
 device diagnostics and generate reports with configurable notifications.
@@ -34,6 +34,7 @@ from phone import (
     StorageModule,
     ThermalModule,
     create_client,
+    describe_model,
 )
 from phone.models import (
     BatteryHealth,
@@ -674,10 +675,12 @@ class DiagnosticsRunner:
         assert report.thermal is not None, "report.thermal must be populated"
         lines = [
             "=" * 60,
-            f"Galaxy S22+ Health Report - {report.timestamp.strftime('%Y-%m-%d %H:%M:%S')}",
+            f"{describe_model(report.device.model)} Health Report - "
+            f"{report.timestamp.strftime('%Y-%m-%d %H:%M:%S')}",
             "=" * 60,
             "",
-            f"Device: {report.device.model} (Android {report.device.android_version})",
+            f"Device: {report.device.model} (Android {report.device.android_version}, "
+            f"API {report.device.api_level})",
             f"Security Patch: {report.device.security_patch}",
             f"Overall Status: {report.overall_status.upper()}",
             "",
@@ -764,14 +767,13 @@ class DiagnosticsRunner:
             _sys.path.insert(0, str(self.output_root.parent / "phone-lib" / "src"))
             from phone.notify import DesktopNotifier
 
-            notifier = DesktopNotifier(app_id="Galaxy S22+ Diagnostics")
+            brand = describe_model(report.device.model) if report.device else "Galaxy"
+            notifier = DesktopNotifier(app_id=f"{brand} Diagnostics")
             if report.overall_status == "healthy":
-                ok = notifier.notify(
-                    "Galaxy S22+ Health Check", report.summary or "All checks passed"
-                )
+                ok = notifier.notify(f"{brand} Health Check", report.summary or "All checks passed")
             else:
                 ok = notifier.notify(
-                    f"Galaxy S22+ Health: {report.overall_status.upper()}",
+                    f"{brand} Health: {report.overall_status.upper()}",
                     report.summary or "Issues detected - see the report",
                     long=True,
                 )
@@ -845,7 +847,10 @@ class DiagnosticsRunner:
             msg = MIMEMultipart()
             msg["From"] = email_config["from_address"]
             msg["To"] = ", ".join(email_config["to_addresses"])
-            msg["Subject"] = f"Galaxy S22+ Health Check - {report.overall_status.upper()}"
+            msg["Subject"] = (
+                f"{describe_model(report.device.model) if report.device else 'Galaxy'} "
+                f"Health Check - {report.overall_status.upper()}"
+            )
 
             body = self.format_summary(report)
             msg.attach(MIMEText(body, "plain"))
@@ -861,7 +866,7 @@ class DiagnosticsRunner:
 
     def run(self) -> int:
         """Run diagnostics and return exit code."""
-        self.logger.info("Starting Galaxy S22+ diagnostics")
+        self.logger.info("Starting Galaxy diagnostics")
         self.start_time = datetime.now()
 
         try:
@@ -886,7 +891,7 @@ class DiagnosticsRunner:
 
     async def run_async(self) -> int:
         """Run diagnostics asynchronously (for use within existing event loop)."""
-        self.logger.info("Starting Galaxy S22+ diagnostics (async)")
+        self.logger.info("Starting Galaxy diagnostics (async)")
         self.start_time = datetime.now()
 
         try:

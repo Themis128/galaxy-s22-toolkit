@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Galaxy S22+ Monitoring Dashboard with Devin control API for Groq bot."""
+"""Galaxy Monitoring Dashboard with Devin control API for Groq bot."""
 
 from __future__ import annotations
 
@@ -324,8 +324,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title="Galaxy S22+ Monitoring Dashboard",
-    description="Real-time device monitoring via ADB",
+    title="Galaxy Monitoring Dashboard",
+    description="Real-time device monitoring via ADB (Samsung Galaxy S/Note/A)",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -751,7 +751,7 @@ def _notify_repair_toast(result: Any) -> None:
     try:
         from phone.notify import DesktopNotifier
 
-        notifier = DesktopNotifier(app_id="Galaxy S22+ Toolkit")
+        notifier = DesktopNotifier(app_id="Galaxy Toolkit")
         emoji = "succeeded" if result.success else "failed"
         notifier.notify(
             f"Repair {emoji}: {result.action.name}",

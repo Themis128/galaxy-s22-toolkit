@@ -761,34 +761,63 @@ class RepairModule:
         )
 
     async def _repair_disable_bloatware(self, **kwargs: Any) -> RepairResult:
-        """Disable common Samsung bloatware."""
+        """Disable common Samsung bloatware.
+
+        One `pm list packages` round-trip partitions installed/enabled,
+        installed/disabled, and absent packages in Python, so the action
+        is model-agnostic: bloatware entries that don't exist on this
+        Galaxy generation (S Voice on Note20, VR Service on A-series...)
+        are counted as absent, not attempted.
+        """
         disabled = []
         already_disabled = []
+        absent = []
+
+        installed: set[str] = set()
+        disabled_set: set[str] = set()
+        try:
+            listing = await self.client.execute_async("shell", "pm list packages -d")
+            disabled_set = {
+                line.removeprefix("package:").strip()
+                for line in listing.splitlines()
+                if line.startswith("package:")
+            }
+            listing = await self.client.execute_async("shell", "pm list packages")
+            installed = {
+                line.removeprefix("package:").strip()
+                for line in listing.splitlines()
+                if line.startswith("package:")
+            }
+        except Exception:
+            # Can't enumerate - fall back to per-package probing below
+            installed = set()
+            disabled_set = set()
 
         for pkg in self.SAMSUNG_BLOATWARE:
+            if installed and pkg not in installed:
+                absent.append(pkg)
+                continue
+            if pkg in disabled_set:
+                already_disabled.append(pkg)
+                continue
             try:
-                # Check if installed and enabled
-                output = await self.client.execute_async(
-                    "shell", f"pm list packages -d {pkg} 2>/dev/null"
-                )
-                if pkg in output:
-                    already_disabled.append(pkg)
-                    continue
-
-                output = await self.client.execute_async(
-                    "shell", f"pm list packages {pkg} 2>/dev/null"
-                )
-                if pkg in output:
-                    await self.client.execute_async("shell", f"pm disable-user --user 0 {pkg}")
-                    disabled.append(pkg)
+                await self.client.execute_async("shell", f"pm disable-user --user 0 {pkg}")
+                disabled.append(pkg)
             except Exception:
-                pass
+                absent.append(pkg)
 
         return RepairResult(
             action=next(a for a in self.AVAILABLE_ACTIONS if a.name == "disable_bloatware"),
             success=True,
-            message=f"Disabled {len(disabled)} bloatware packages ({len(already_disabled)} already disabled)",
-            details={"disabled": disabled, "already_disabled": already_disabled},
+            message=(
+                f"Disabled {len(disabled)} bloatware packages "
+                f"({len(already_disabled)} already disabled, {len(absent)} not on this model)"
+            ),
+            details={
+                "disabled": disabled,
+                "already_disabled": already_disabled,
+                "absent_on_model": absent,
+            },
             requires_reboot=False,
         )
 

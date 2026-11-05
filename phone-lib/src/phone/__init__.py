@@ -1,10 +1,11 @@
-"""Galaxy S22+ Phone Toolkit - Python ADB wrapper library."""
+"""Galaxy Phone Toolkit - Python ADB wrapper library (Samsung Galaxy S/Note/A)."""
 
 from __future__ import annotations
 
 from .adb import AdbClient, create_client
 from .apps import AppsModule
 from .battery import BatteryModule
+from .capabilities import DeviceProfile, describe_model, detect_profile
 from .device import DeviceModule
 from .exceptions import (
     AdbConnectionError,
@@ -84,6 +85,9 @@ __all__ = [
     "HealthReport",
     # Modules
     "DeviceModule",
+    "DeviceProfile",
+    "detect_profile",
+    "describe_model",
     "BatteryModule",
     "StorageModule",
     "LogcatModule",

@@ -1,8 +1,12 @@
 # Diagnostics Configuration
 
-# Device settings
+# Device settings.
+# Works with any Samsung Galaxy (S/Note/A, Android 10+). serial /
+# preferred_serial are OPTIONAL: leave them out (or empty) and the
+# auto-detector picks the only attached device. Set them when more than
+# one phone is connected and you want a deterministic choice.
 device:
-  serial: "RFCTA0AEKZP"  # Galaxy S22+ serial
+  serial: "RFCTA0AEKZP"  # current phone's serial (optional; see above)
   adb_path: ""  # Auto-detect if empty
   wireless_adb:
     enabled: true

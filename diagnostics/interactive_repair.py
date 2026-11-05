@@ -81,7 +81,7 @@ class InteractiveRepairCLI:
                 # Deep-link must match the dashboard's actual port
                 dash_port = os.getenv("DASHBOARD_PORT", "8081")
                 self.notifier = DesktopNotifier(
-                    app_id="Galaxy S22+ Toolkit",
+                    app_id="Galaxy Toolkit",
                     dashboard_url=f"http://127.0.0.1:{dash_port}",
                 )
 
@@ -255,7 +255,7 @@ class InteractiveRepairCLI:
     async def run_interactive(self) -> None:
         """Main interactive loop."""
         print("=" * 80)
-        print("📱 Galaxy S22+ Interactive Diagnostics & Repair")
+        print("📱 Galaxy Interactive Diagnostics & Repair")
         print("=" * 80)
 
         # Initialize

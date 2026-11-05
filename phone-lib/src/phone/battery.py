@@ -76,12 +76,15 @@ class BatteryModule:
             plugged_type = "Wireless"
 
         # dumpsys battery exposes instantaneous current and the coulomb
-        # counter on Samsung devices (sysfs power_supply is adb-gated here)
+        # counter on Samsung devices; on some generations the line is
+        # absent, so fall back to sysfs power_supply before giving up.
         current_ma: int | None = None
         for key in ("current now", "Current now"):
             if key in data and data[key].lstrip("-").isdigit():
                 current_ma = int(data[key])
                 break
+        if current_ma is None:
+            current_ma = self._read_sysfs_current()
 
         charge_counter: int | None = None
         if data.get("Charge counter", "").lstrip("-").isdigit():
@@ -111,6 +114,33 @@ class BatteryModule:
             present=data.get("present", "true").lower() == "true",
             scale=scale,
         )
+
+    def _read_sysfs_current(self) -> int | None:
+        """Read instantaneous battery current from sysfs power_supply.
+
+        Units differ across kernels (µA on most Samsung kernels, mA on
+        some Qualcomm ones) and the sign convention is not standardised,
+        so a magnitude check picks the unit and implausible values are
+        discarded as None.
+        """
+        try:
+            out = self.client.execute(
+                "shell",
+                "cat",
+                "/sys/class/power_supply/battery/current_now",
+                check=False,
+            )
+        except Exception:
+            return None
+        val = out.strip()
+        if not val.lstrip("-").isdigit():
+            return None
+        ma = int(val)
+        if abs(ma) > 100000:  # kernel reports µA - convert to mA
+            ma = int(ma / 1000)
+        if 0 < abs(ma) <= 20000:  # plausible instantaneous range
+            return ma
+        return None
 
     def _get_batterystats_extras(self) -> dict[str, Any]:
         """Get additional battery stats from dumpsys batterystats."""

@@ -60,6 +60,8 @@ jobs:
           PYTHONPATH: phone-lib/src
       - name: Run dashboard tests
         run: pytest dashboard/tests -v --tb=short -p no:cacheprovider
+      - name: Run diagnostics tests
+        run: pytest diagnostics/tests -v --tb=short -p no:cacheprovider
       - name: Run tools tests
         run: pytest tools/test_tools.py tools/test_insights.py -v --tb=short -p no:cacheprovider
 
