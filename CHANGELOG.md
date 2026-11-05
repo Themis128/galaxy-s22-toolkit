@@ -1,7 +1,43 @@
 # Changelog
 
-All notable changes to the Galaxy S22+ toolkit. Format loosely follows
+All notable changes to the Galaxy toolkit. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); dates are ISO 8601.
+
+## [0.4.0] - 2026-11-06
+
+### Added
+- **Multi-Galaxy compatibility** (Galaxy S/Note/A, Android 10+ → S22+):
+  - `phone.capabilities`: probe-first `DeviceProfile` with marketing-name
+    resolution (S8-S24, Note8-20, common A cores), chipset decode
+    (Exynos/Qualcomm), One UI version; unknown models degrade to raw codes,
+    never hard-fail.
+  - Battery: sysfs `current_now` fallback (µA-vs-mA magnitude check) for
+    generations whose `dumpsys battery` omits the current line.
+  - Bloatware repair is model-agnostic: one `pm list packages` pass
+    partitions installed/disabled/absent; entries absent on the model are
+    reported, not attempted.
+  - Diagnostics reports, toasts and email brand from the detected model;
+    config documents that `serial`/`preferred_serial` are optional
+    (auto-detect picks the only attached phone).
+- **Tests**: 24 cross-model compatibility tests (profile fixtures for
+  S10/S20/S21/Note20U/A54/S22+/unknown, dumpsys parser variants per Android
+  format, bloatware partitioning) and 5 hermetic runner tests restoring the
+  diagnostics coverage; CI gains a diagnostics test step.
+- `phone-lib` ships `py.typed` (verified in the wheel) — downstream mypy
+  checks the real phone API instead of `Any`.
+
+### Fixed
+- Security: `tools/dashboard_client.py` re-validates the SSRF blocklist on
+  **every** request (was: once in `main()`), closing the validate-once /
+  DNS-rebinding window; `allow_private` threaded through all call sites.
+- FastAPI: `Request | None` dependency parameter crashed route registration
+  for all `/api/devin/*` endpoints.
+- Repo-wide `mypy --strict` clean (38→40 files); CI mypy widened from
+  `phone-lib/src` to `diagnostics dashboard tools phone-lib/src` with
+  `--explicit-package-bases`; mypy job installs fastapi/uvicorn/types-PyYAML.
+- CI ruff scope now includes `tools/`; wheel ships the `py.typed` marker.
+- Runner tests made hermetic (patch `_create_client` + module constructors
+  for the whole flow) — they no longer touch a live device or real adb.
 
 ## [0.3.0] - 2026-11-04
 
