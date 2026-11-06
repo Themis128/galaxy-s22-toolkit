@@ -1016,7 +1016,13 @@
                 if (!response.ok) {
                     throw new Error(result.error || `HTTP ${response.status}`);
                 }
-                alert(`Diagnostics completed: ${result.status} (exit code: ${result.exit_code})`);
+                let msg = `Diagnostics: ${result.checks_passed ?? '?'}/${result.checks_total ?? '?'} checks passed`;
+                if (result.non_passing && result.non_passing.length > 0) {
+                    for (const c of result.non_passing) {
+                        msg += `\n${c.status === 'warning' ? '⚠' : '✖'} ${c.name}: ${c.message}`;
+                    }
+                }
+                alert(`${msg}\n(exit code: ${result.exit_code})`);
                 refreshData();
             } catch (error) {
                 console.error('Diagnostics failed:', error);

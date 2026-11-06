@@ -661,7 +661,28 @@ async def api_diagnostics_run() -> JSONResponse:
         logger.error("Diagnostics run failed: %s", exc)
         return JSONResponse({"error": f"Diagnostics run failed: {exc}"}, status_code=500)
     status = {0: "completed", 1: "issues_found", 2: "critical"}.get(exit_code, "error")
-    return JSONResponse({"exit_code": exit_code, "status": status})
+    # Summarize the freshly written report so the UI can show WHY it exited
+    # non-zero instead of a bare exit code.
+    checks = _latest_diagnostics_results() or []
+    non_pass = [
+        {
+            "name": c.get("name"),
+            "status": str(c.get("status", "")),
+            "message": str(c.get("message", ""))[:160],
+        }
+        for c in checks
+        if str(c.get("status", "")).lower() not in ("pass", "ok")
+    ][:5]
+    passed = sum(1 for c in checks if str(c.get("status", "")).lower() in ("pass", "ok"))
+    return JSONResponse(
+        {
+            "exit_code": exit_code,
+            "status": status,
+            "checks_total": len(checks),
+            "checks_passed": passed,
+            "non_passing": non_pass,
+        }
+    )
 
 
 # ===== Repair API (for auto-repair with user approval) =====
@@ -737,7 +758,7 @@ def _latest_diagnostics_results() -> list[dict[str, Any]] | None:
 
         with open(report_files[-1], encoding="utf-8") as f:
             report = json.load(f)
-        return report.get("check_results") or report.get("results") or None
+        return report.get("check_results") or report.get("results") or report.get("checks") or None
     except Exception as exc:
         logger.warning("Could not load latest diagnostics report: %s", exc)
         return None
