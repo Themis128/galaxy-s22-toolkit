@@ -121,6 +121,46 @@ class TestBulkRepairRobustness:
         assert body["successful"] == 0
         assert body["total"] == 1
 
+    def test_diagnostics_run_returns_json_on_runner_crash(
+        self, api_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A crashing DiagnosticsRunner yields a JSON 500, not a bare text 500."""
+        import diagnostics.run_diagnostics as diag_mod
+
+        class ExplodingRunner:
+            def __init__(self, *_args: object, **_kwargs: object) -> None:
+                pass
+
+            def run(self) -> int:
+                raise RuntimeError("no adb in this environment")
+
+        monkeypatch.setattr(diag_mod, "DiagnosticsRunner", ExplodingRunner)
+
+        r = api_client.post("/api/diagnostics/run")
+        assert r.status_code == 500
+        body = r.json()
+        assert "Diagnostics run failed" in body["error"]
+        assert "no adb" in body["error"]
+
+    def test_diagnostics_run_503_when_package_missing(
+        self, api_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A missing diagnostics package yields a JSON 503, not a bare 500."""
+        import builtins
+
+        real_import = builtins.__import__
+
+        def fake_import(name: str, *args: object, **kwargs: object) -> object:
+            if name == "diagnostics.run_diagnostics":
+                raise ImportError("No module named 'diagnostics.run_diagnostics'")
+            return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+
+        r = api_client.post("/api/diagnostics/run")
+        assert r.status_code == 503
+        assert "Diagnostics unavailable" in r.json()["error"]
+
 
 class TestAuth:
     def test_devin_status_requires_key(self, api_client: TestClient) -> None:

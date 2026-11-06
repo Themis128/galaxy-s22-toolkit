@@ -1007,12 +1007,20 @@
             
             try {
                 const response = await fetch('/api/diagnostics/run', { method: 'POST' });
-                const result = await response.json();
+                let result;
+                try {
+                    result = await response.json();
+                } catch (parseError) {
+                    throw new Error(`server error (HTTP ${response.status})`);
+                }
+                if (!response.ok) {
+                    throw new Error(result.error || `HTTP ${response.status}`);
+                }
                 alert(`Diagnostics completed: ${result.status} (exit code: ${result.exit_code})`);
                 refreshData();
             } catch (error) {
                 console.error('Diagnostics failed:', error);
-                alert('Failed to run diagnostics');
+                alert('Diagnostics failed: ' + error.message);
             } finally {
                 btn.disabled = false;
                 btn.textContent = '🏥 Run Diagnostics';

@@ -647,12 +647,19 @@ async def ws_live(websocket: WebSocket) -> None:
 @app.post("/api/diagnostics/run")
 async def api_diagnostics_run() -> JSONResponse:
     """Trigger a full diagnostics run via DiagnosticsRunner."""
-    from diagnostics.run_diagnostics import DiagnosticsRunner
-
+    try:
+        from diagnostics.run_diagnostics import DiagnosticsRunner
+    except ImportError as exc:
+        # Image without the diagnostics package (or broken install)
+        return JSONResponse({"error": f"Diagnostics unavailable: {exc}"}, status_code=503)
     config_path = PROJECT_ROOT / "diagnostics" / "config.yaml"
-    runner = DiagnosticsRunner(config_path)
-    loop = asyncio.get_running_loop()
-    exit_code = await loop.run_in_executor(None, runner.run)
+    try:
+        runner = DiagnosticsRunner(config_path)
+        loop = asyncio.get_running_loop()
+        exit_code = await loop.run_in_executor(None, runner.run)
+    except Exception as exc:  # noqa: BLE001 - a crashing run must not yield a bare 500
+        logger.error("Diagnostics run failed: %s", exc)
+        return JSONResponse({"error": f"Diagnostics run failed: {exc}"}, status_code=500)
     status = {0: "completed", 1: "issues_found", 2: "critical"}.get(exit_code, "error")
     return JSONResponse({"exit_code": exit_code, "status": status})
 

@@ -7,7 +7,9 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY phone-lib/ /app/phone-lib/
-COPY diagnostics/config.yaml /app/diagnostics/config.yaml
+# Full diagnostics package (logs/reports stay out via .dockerignore) so
+# POST /api/diagnostics/run works inside the container
+COPY diagnostics/ /app/diagnostics/
 COPY dashboard/ /app/dashboard/
 COPY tools/ /app/tools/
 
