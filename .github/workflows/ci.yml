@@ -90,7 +90,9 @@ jobs:
 
   publish-pypi:
     name: Publish to PyPI
-    runs-on: windows-latest
+    # Linux-only: pypa/gh-action-pypi-publish is a Docker action; the wheel
+    # is built on Windows but publishing it needs no Windows toolchain.
+    runs-on: ubuntu-latest
     needs: build-wheel
     # Opt-in: set the repo variable ENABLE_PYPI=true (Settings -> Variables)
     # AND configure trusted publishing on pypi.org for this repo first.
