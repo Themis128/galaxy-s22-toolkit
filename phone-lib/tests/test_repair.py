@@ -86,3 +86,50 @@ class TestHistoryPersistence:
         history_file.write_text("not json\n{bad json\n", encoding="utf-8")
         module = RepairModule(mock_adb_client, history_path=history_file)
         assert module.history == []
+
+
+class TestRadioToggleTransportGuard:
+    """Radio toggles over wireless ADB kill their own transport: the disable
+    succeeds, the connection drops, and the re-enable never arrives — leaving
+    the radio off and ADB unreachable. These actions must refuse up front."""
+
+    def _wireless_module(self) -> RepairModule:
+        from unittest.mock import MagicMock
+
+        client = MagicMock()
+        client.serial = "192.168.1.77:5555"
+        return RepairModule(client)
+
+    async def test_reset_wifi_refuses_wireless(self):
+        module = self._wireless_module()
+        result = await module._repair_reset_wifi()
+        assert result.success is False
+        assert "USB transport" in result.message
+        module.client.execute_async.assert_not_called()
+
+    async def test_reset_mobile_data_refuses_wireless(self):
+        module = self._wireless_module()
+        result = await module._repair_reset_mobile_data()
+        assert result.success is False
+        assert "USB transport" in result.message
+        module.client.execute_async.assert_not_called()
+
+    async def test_toggle_airplane_mode_refuses_wireless(self):
+        module = self._wireless_module()
+        result = await module._repair_toggle_airplane_mode()
+        assert result.success is False
+        assert "USB transport" in result.message
+        module.client.execute_async.assert_not_called()
+
+    async def test_flush_dns_refuses_wireless(self):
+        module = self._wireless_module()
+        result = await module._repair_flush_dns()
+        assert result.success is False
+        assert "USB transport" in result.message
+        module.client.execute_async.assert_not_called()
+
+    async def test_radio_toggles_still_run_over_usb(self, repair):
+        """USB serial (no colon) bypasses the guard — commands are issued."""
+        result = await repair._repair_reset_wifi()
+        assert result.success is True
+        assert repair.client.execute_async.call_count >= 2

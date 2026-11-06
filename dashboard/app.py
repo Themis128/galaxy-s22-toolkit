@@ -46,9 +46,11 @@ from dashboard.metrics_db import get_metrics_db, init_metrics_db  # noqa: E402
 if TYPE_CHECKING:
     from phone import create_client
     from phone.capabilities import detect_profile
+    from phone.exceptions import PhoneError
 else:
     from phone import create_client  # type: ignore[import-untyped]
     from phone.capabilities import detect_profile  # type: ignore[import-untyped]
+    from phone.exceptions import PhoneError  # type: ignore[import-untyped]
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -405,9 +407,12 @@ async def api_health() -> JSONResponse:
     loop = asyncio.get_running_loop()
     try:
         metrics = await loop.run_in_executor(None, _collect_once)
-    except (ConnectionError, OSError):
+    except (ConnectionError, OSError, PhoneError):
         # OSError covers FileNotFoundError when the adb binary itself is
-        # missing (bare CI runners) - still degrade to "device unreachable".
+        # missing (bare CI runners); PhoneError covers CommandFailedError
+        # when the transport dies mid-collection — both degrade to
+        # "device unreachable" instead of a bare text 500 the UI cannot
+        # parse.
         return JSONResponse({"error": "Device not connected"}, status_code=503)
     except RuntimeError as exc:
         return JSONResponse({"error": str(exc)}, status_code=500)
@@ -640,7 +645,7 @@ async def ws_live(websocket: WebSocket) -> None:
         try:
             initial = await loop.run_in_executor(None, _collect_once)
             await websocket.send_json({"type": "initial", "data": initial})
-        except (ConnectionError, RuntimeError):
+        except (ConnectionError, RuntimeError, PhoneError):
             await websocket.send_json({"type": "error", "data": "device not available"})
         while True:
             await websocket.receive_text()  # keepalive pings from the client

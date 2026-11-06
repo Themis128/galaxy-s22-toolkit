@@ -859,9 +859,40 @@ class RepairModule:
 
     # ===== Network Repairs =====
 
+    @staticmethod
+    def _is_wireless_transport(client: Any) -> bool:
+        """True when the client dials the phone over a network transport.
+
+        Radio-toggle repairs are unsafe here: `svc wifi disable` (or airplane
+        mode on) kills the very connection the re-enable step needs, so the
+        phone can be left with its radio off and ADB unreachable. Network
+        serials look like `192.168.1.77:5555`; USB serials do not contain a
+        colon.
+        """
+        serial = str(getattr(client, "serial", "") or "")
+        return ":" in serial
+
+    def _radio_toggle_guard(self, action: Any) -> RepairResult | None:
+        """Honest refusal for radio toggles over wireless ADB."""
+        if not self._is_wireless_transport(self.client):
+            return None
+        return RepairResult(
+            action=action,
+            success=False,
+            message=(
+                "Skipped: radio toggle requires the USB transport. Over wireless "
+                "ADB the disable step kills the connection the re-enable needs, "
+                "leaving the radio off and ADB unreachable (connect the phone "
+                "over USB and re-run)."
+            ),
+        )
+
     async def _repair_reset_wifi(self, **kwargs: Any) -> RepairResult:
         """Toggle Wi-Fi off/on (re-enables even if the toggle half-fails)."""
         action = next(a for a in self.AVAILABLE_ACTIONS if a.name == "reset_wifi")
+        guarded = self._radio_toggle_guard(action)
+        if guarded is not None:
+            return guarded
         try:
             disable_error = None
             try:
@@ -891,6 +922,9 @@ class RepairModule:
     async def _repair_reset_mobile_data(self, **kwargs: Any) -> RepairResult:
         """Toggle mobile data off/on (re-enables even if the toggle half-fails)."""
         action = next(a for a in self.AVAILABLE_ACTIONS if a.name == "reset_mobile_data")
+        guarded = self._radio_toggle_guard(action)
+        if guarded is not None:
+            return guarded
         try:
             disable_error = None
             try:
@@ -919,6 +953,10 @@ class RepairModule:
 
     async def _repair_toggle_airplane_mode(self, **kwargs: Any) -> RepairResult:
         """Toggle airplane mode."""
+        action = next(a for a in self.AVAILABLE_ACTIONS if a.name == "toggle_airplane_mode")
+        guarded = self._radio_toggle_guard(action)
+        if guarded is not None:
+            return guarded
         try:
             # Use settings only (broadcast requires system permission on newer Android)
             await self.client.execute_async("shell", "settings put global airplane_mode_on 1")
@@ -926,26 +964,30 @@ class RepairModule:
             await self.client.execute_async("shell", "settings put global airplane_mode_on 0")
 
             return RepairResult(
-                action=next(a for a in self.AVAILABLE_ACTIONS if a.name == "toggle_airplane_mode"),
+                action=action,
                 success=True,
                 message="Airplane mode toggled via settings (all radios reset)",
                 details={},
             )
         except Exception as e:
             return RepairResult(
-                action=next(a for a in self.AVAILABLE_ACTIONS if a.name == "toggle_airplane_mode"),
+                action=action,
                 success=False,
                 message=f"Failed to toggle airplane mode: {e}",
             )
 
     async def _repair_flush_dns(self, **kwargs: Any) -> RepairResult:
         """Flush DNS cache."""
+        action = next(a for a in self.AVAILABLE_ACTIONS if a.name == "flush_dns")
+        guarded = self._radio_toggle_guard(action)
+        if guarded is not None:
+            return guarded
         try:
             # Try ndc resolver flushdefaultif (older Android)
             try:
                 await self.client.execute_async("shell", "ndc resolver flushdefaultif")
                 return RepairResult(
-                    action=next(a for a in self.AVAILABLE_ACTIONS if a.name == "flush_dns"),
+                    action=action,
                     success=True,
                     message="DNS cache flushed via ndc resolver",
                     details={},

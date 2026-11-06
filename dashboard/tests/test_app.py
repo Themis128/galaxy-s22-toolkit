@@ -209,6 +209,24 @@ class TestBulkRepairRobustness:
         assert "Diagnostics unavailable" in r.json()["error"]
 
 
+class TestHealthDegradation:
+    def test_health_degrades_on_command_failed(
+        self, api_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """CommandFailedError mid-collection -> JSON 503, not a bare text 500."""
+        import dashboard.app as app_module
+        from phone.exceptions import CommandFailedError
+
+        def boom() -> dict[str, object]:
+            raise CommandFailedError(["adb", "shell", "dumpsys"], 1, "", "")
+
+        monkeypatch.setattr(app_module, "_collect_once", boom)
+
+        r = api_client.get("/api/health")
+        assert r.status_code == 503
+        assert r.json()["error"] == "Device not connected"
+
+
 class TestAuth:
     def test_devin_status_requires_key(self, api_client: TestClient) -> None:
         r = api_client.get("/api/devin/status")
