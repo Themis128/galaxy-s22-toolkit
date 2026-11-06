@@ -159,7 +159,12 @@ class NetworkModule:
         return None
 
     def _get_dns_servers(self) -> list[str]:
-        """Get DNS servers from system properties."""
+        """Get DNS servers: net.dns* properties, then dumpsys connectivity.
+
+        Android 16 stopped populating net.dns1-4; the per-network
+        `DnsAddresses` records in `dumpsys connectivity` carry the live
+        resolvers instead.
+        """
         try:
             dns1 = self.client.execute("shell", "getprop", "net.dns1")
             dns2 = self.client.execute("shell", "getprop", "net.dns2")
@@ -171,9 +176,25 @@ class NetworkModule:
                 dns = dns.strip()
                 if dns and dns != "0.0.0.0":
                     servers.append(dns)
-            return servers
+            if servers:
+                return servers
+        except Exception:
+            pass
+        return self._get_dns_from_connectivity()
+
+    def _get_dns_from_connectivity(self) -> list[str]:
+        """Parse DnsAddresses records from `dumpsys connectivity`."""
+        try:
+            output = self.client.execute("shell", "dumpsys", "connectivity")
         except Exception:
             return []
+        servers: list[str] = []
+        for m in re.finditer(r"DnsAddresses:\s*\[([^\]]*)\]", output):
+            for token in m.group(1).split(","):
+                token = token.strip().lstrip("/")
+                if token and token not in servers:
+                    servers.append(token)
+        return servers
 
     def _get_gateway(self) -> str | None:
         """Get default gateway."""

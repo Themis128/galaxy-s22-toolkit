@@ -70,3 +70,38 @@ ScanResult[1]: BSSID: 11:22:33:44:55:66 SSID: "OtherNetwork" freq: 5180 level: -
         # Fixture has: wlan0 rx=1000000, tx=2000000
         assert stats["wlan0"]["rx_bytes"] == 1000000
         assert stats["wlan0"]["tx_bytes"] == 2000000
+
+
+class TestDnsFallback:
+    """Android 16 stopped populating net.dns1-4 - DnsAddresses fallback must engage."""
+
+    CONNECTIVITY_DUMP = (
+        "Active default network: 101\n"
+        "  NetworkAgentInfo{network{101} ni{MOBILE[LTE] CONNECTED} "
+        "lp{{InterfaceName: rmnet1 DnsAddresses: [ /2a02:1388:1:2::53,/2a02:1388:2001:2::53 ]}}}\n"
+        "  NetworkAgentInfo{network{102} ni{WIFI CONNECTED} "
+        "lp{{InterfaceName: wlan0 DnsAddresses: [ /192.168.1.1, /2a02:1388:1:2::53 ]}}}\n"
+    )
+
+    def test_dns_from_connectivity_when_props_empty(self, mock_adb_client):
+        """net.dns* empty -> parse dedup'd DnsAddresses from dumpsys connectivity."""
+        from unittest.mock import MagicMock
+
+        module = NetworkModule(mock_adb_client)
+
+        def execute(*args, **kwargs):
+            if args[:2] == ("shell", "getprop"):
+                return ""
+            if args[:2] == ("shell", "dumpsys") and "connectivity" in args:
+                return self.CONNECTIVITY_DUMP
+            return ""
+
+        mock_adb_client.execute = MagicMock(side_effect=execute)
+        servers = module._get_dns_servers()
+        assert servers == ["2a02:1388:1:2::53", "2a02:1388:2001:2::53", "192.168.1.1"]
+
+    def test_props_win_when_present(self, mock_adb_client):
+        """net.dns* values still take precedence when populated (older Androids)."""
+        module = NetworkModule(mock_adb_client)
+        # conftest mock provides net.dns1=192.168.1.1, net.dns2=8.8.8.8
+        assert module._get_dns_servers() == ["192.168.1.1", "8.8.8.8"]

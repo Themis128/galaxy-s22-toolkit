@@ -85,6 +85,43 @@ class TestRepairEndpoints:
             assert isinstance(r.json(), list)
 
 
+class TestBulkRepairRobustness:
+    def test_execute_multiple_returns_json_on_action_exception(
+        self, api_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A raising action yields a JSON 500 the UI can parse, not a bare text 500."""
+        import types
+
+        import dashboard.app as app_module
+        import phone.repair as repair_mod
+
+        class ExplodingModule:
+            AVAILABLE_ACTIONS = [
+                types.SimpleNamespace(
+                    name="explode", description="boom", risk_level="low", auto_approve=True
+                )
+            ]
+
+            def __init__(self, *_args: object, **_kwargs: object) -> None:
+                pass
+
+            async def execute_multiple(self, *_a: object, **_k: object) -> object:
+                raise RuntimeError("adb died mid-batch")
+
+        monkeypatch.setattr(repair_mod, "RepairModule", ExplodingModule)
+        monkeypatch.setattr(app_module, "client", object())  # past the 503 guard
+
+        r = api_client.post(
+            "/api/repair/execute-multiple",
+            json={"action_names": ["explode"], "kwargs": {}, "confirm": True},
+        )
+        assert r.status_code == 500
+        body = r.json()
+        assert "Bulk repair failed" in body["error"]
+        assert body["successful"] == 0
+        assert body["total"] == 1
+
+
 class TestAuth:
     def test_devin_status_requires_key(self, api_client: TestClient) -> None:
         r = api_client.get("/api/devin/status")

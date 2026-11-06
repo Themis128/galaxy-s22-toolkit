@@ -153,3 +153,58 @@ class TestAppsModule:
         result = module.backup_app("com.example.app", "./backups")
 
         assert result is True
+
+
+class TestRunningAppsAndroid16:
+    """`cmd activity top` was removed on Android 16 - the dumpsys fallback must engage."""
+
+    PROCDUMP = (
+        "    Proc #65: psvc   F/ /PER  LCMNFUAT  t: 0 5989:com.sec.imsservice:ImsUpdateService/1000 (service)\n"
+        "    Proc #76: vis    F/S/FGS  ---NFU-T  t: 0 20049:com.tailscale.ipn/u0a387 (service)\n"
+        "    Proc #33: psvc   F/ /PER  LCMNFUAT  t: 0 6886:com.google.android.providers.media.module/u0a327 (service)\n"
+        "    Proc # 3: psvc   F/ /PER  LCMNFUAT  t: 0 4073:com.android.bluetooth/1002 (service)\n"
+    )
+
+    def _mock(self, client, top_output: str) -> None:
+        from unittest.mock import MagicMock
+
+        def execute(*args, **kwargs):
+            if args[:3] == ("shell", "cmd", "activity"):
+                return top_output
+            if args[:3] == ("shell", "dumpsys", "activity"):
+                return self.PROCDUMP
+            return ""
+
+        client.execute = MagicMock(side_effect=execute)
+
+    def test_unknown_command_falls_back_to_dumpsys(self, mock_adb_client):
+        """'Unknown command: top' routes to the dumpsys activity processes parser."""
+        module = AppsModule(mock_adb_client)
+        self._mock(mock_adb_client, "Unknown command: top\n")
+        apps = module.get_running_apps()
+        assert "com.sec.imsservice" in apps
+        assert "com.tailscale.ipn" in apps
+        assert "com.google.android.providers.media.module" in apps
+        assert "psvc" not in apps  # state tokens must not leak in
+        assert apps == sorted(set(apps))
+
+    def test_empty_top_output_falls_back(self, mock_adb_client):
+        """Empty top output also routes to the fallback."""
+        module = AppsModule(mock_adb_client)
+        self._mock(mock_adb_client, "")
+        apps = module.get_running_apps()
+        assert "com.android.bluetooth" in apps
+
+    def test_legacy_top_output_still_parsed(self, mock_adb_client):
+        """Older Androids keep the package/activity parser (no fallback run)."""
+        module = AppsModule(mock_adb_client)
+        self._mock(
+            mock_adb_client,
+            "ACTIVITY MANAGER RUNNING ACTIVITIES\n  TaskRecord{1234 com.example.app}\n"
+            "    com.another.app/.MainActivity\n",
+        )
+        apps = module.get_running_apps()
+        assert "com.example.app" in apps
+        assert "com.another.app/.MainActivity" in apps
+        calls = [c.args for c in mock_adb_client.execute.call_args_list]
+        assert not any(a[:3] == ("shell", "dumpsys", "activity") for a in calls)

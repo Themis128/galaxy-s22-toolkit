@@ -284,21 +284,41 @@ class AppsModule:
         return self.start_app(package_name, activity)
 
     def get_running_apps(self) -> list[str]:
-        """Get currently running apps."""
+        """Get currently running apps.
+
+        `cmd activity top` was removed on Android 16 ("Unknown command: top"),
+        so fall back to `dumpsys activity processes` Proc# records, which list
+        every live process as `<pid>:<package>[:component]/<uid> (state)`.
+        """
         try:
             output = self.client.execute("shell", "cmd", "activity", "top")
-            packages = []
-            for line in output.split("\n"):
-                # Match both formats: package/activity and TaskRecord{...}
-                match = re.search(r"([a-zA-Z0-9_.]+/[a-zA-Z0-9_.]+)", line)
-                if match:
-                    packages.append(match.group(1))
-                else:
-                    # Also match TaskRecord{id package}
-                    match = re.search(r"TaskRecord\{[^}]+\s+([a-zA-Z0-9_.]+)", line)
+            if output.strip() and "Unknown command" not in output:
+                packages = []
+                for line in output.split("\n"):
+                    # Match both formats: package/activity and TaskRecord{...}
+                    match = re.search(r"([a-zA-Z0-9_.]+/[a-zA-Z0-9_.]+)", line)
                     if match:
                         packages.append(match.group(1))
-            return list(set(packages))
+                    else:
+                        # Also match TaskRecord{id package}
+                        match = re.search(r"TaskRecord\{[^}]+\s+([a-zA-Z0-9_.]+)", line)
+                        if match:
+                            packages.append(match.group(1))
+                if packages:
+                    return list(set(packages))
+        except Exception:
+            pass
+        # Android 16 fallback: live process records from dumpsys
+        try:
+            output = self.client.execute("shell", "dumpsys", "activity", "processes")
+            packages = []
+            for line in output.split("\n"):
+                if "Proc #" not in line:
+                    continue
+                m = re.search(r"(\d+):([a-zA-Z][\w.]*)", line)
+                if m:
+                    packages.append(m.group(2))
+            return sorted(set(packages))
         except Exception:
             return []
 

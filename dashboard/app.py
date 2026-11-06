@@ -313,6 +313,7 @@ async def collector_loop() -> None:
     """Periodically collect a snapshot, store it, and broadcast to WS clients."""
     global history
     db = get_metrics_db()
+    tick = 0
     while True:
         try:
             loop = asyncio.get_running_loop()
@@ -324,6 +325,13 @@ async def collector_loop() -> None:
                 await manager.broadcast({"type": "metrics", "data": metrics})
             # Persist to SQLite (non-blocking in executor)
             await loop.run_in_executor(None, db.insert_snapshot, metrics)
+            # Refresh hourly/daily rollups every ~60 s so the trend charts
+            # have data right after a restart (the upserts are idempotent;
+            # daily depends on hourly, so keep the order).
+            tick += 1
+            if tick % 12 == 0:
+                await loop.run_in_executor(None, db.compute_hourly_rollups, 2)
+                await loop.run_in_executor(None, db.compute_daily_rollups, 2)
         except ConnectionError:
             # Device unplugged: keep the loop alive, retry after the interval.
             logger.warning("Device not connected; retrying in %ss", COLLECT_INTERVAL_S)
@@ -832,7 +840,20 @@ async def api_repair_execute_multiple(request: RepairMultipleRequest) -> JSONRes
             status_code=202,
         )
 
-    results = await repair_module.execute_multiple(request.action_names, **request.kwargs)
+    results = []
+    try:
+        results = await repair_module.execute_multiple(request.action_names, **request.kwargs)
+    except Exception as exc:  # noqa: BLE001 - a raising action must not yield a bare 500
+        logger.error("Bulk repair failed: %s", exc)
+        return JSONResponse(
+            {
+                "error": f"Bulk repair failed: {exc}",
+                "successful": 0,
+                "total": len(request.action_names),
+                "results": [],
+            },
+            status_code=500,
+        )
     for r in results:
         _notify_repair_toast(r)
     return JSONResponse(

@@ -800,28 +800,37 @@
 
         document.getElementById('root-modules-refresh').addEventListener('click', loadRootModules);
         
+        // Writable mounts that drive health status (mirrors the diagnostics
+        // rule: immutable factory partitions like /, /vendor, /apex/* are
+        // always ~100% full by design and must not alarm).
+        const WRITABLE_MOUNTS = ['/data', '/storage/emulated', '/sdcard'];
+
         function updateStorage(partitions) {
             const container = document.getElementById('storage-partitions');
             container.innerHTML = '';
-            
+
             const chartLabels = [];
             const chartData = [];
-            
+
             partitions.forEach(p => {
+                const writable = WRITABLE_MOUNTS.includes(p.mount_point);
                 const row = document.createElement('div');
                 row.className = 'metric-row';
+                const cls = writable
+                    ? (p.usage_percent > 85 ? 'critical' : p.usage_percent > 70 ? 'warning' : '')
+                    : '';
                 row.innerHTML = `
                     <span class="metric-label">${p.mount_point}</span>
-                    <span class="metric-value ${p.usage_percent > 85 ? 'critical' : p.usage_percent > 70 ? 'warning' : ''}">
+                    <span class="metric-value ${cls}">
                         ${p.usage_percent.toFixed(1)}% (${p.free_gb.toFixed(1)}GB free)
                     </span>
                 `;
                 container.appendChild(row);
-                
+
                 chartLabels.push(p.mount_point.replace('/','').replace('data','Data').replace('system','System'));
                 chartData.push(p.usage_percent);
             });
-            
+
             charts.storage.data.labels = chartLabels;
             charts.storage.data.datasets[0].data = chartData;
             charts.storage.update();
@@ -941,20 +950,25 @@
         }
         
         function updateOverallStatus(data) {
-            // Determine overall status from thermal, battery, storage
+            // Determine overall status from thermal, battery, storage.
+            // Enum values are compared case-insensitively (API emits
+            // health "Good", thermal status "NORMAL"). Only writable mounts
+            // drive the storage verdict.
             let status = 'healthy';
-            
-            if (data.thermal && (data.thermal.overall_status === 'critical' || data.thermal.cpu_throttling || data.thermal.gpu_throttling)) {
+            const thermalStatus = data.thermal && data.thermal.status ? String(data.thermal.status).toLowerCase() : '';
+            const batteryHealth = data.battery && data.battery.health ? String(data.battery.health).toLowerCase() : 'good';
+
+            if (thermalStatus === 'critical' || (data.thermal && (data.thermal.cpu_throttled || data.thermal.gpu_throttled))) {
                 status = 'critical';
-            } else if (data.battery && (data.battery.level < 15 || data.battery.temperature_c > 45 || data.battery.health !== 'GOOD')) {
+            } else if (data.battery && (data.battery.level < 15 || data.battery.temperature_c > 45 || batteryHealth !== 'good')) {
                 status = 'critical';
-            } else if (data.storage && data.storage.some(p => p.usage_percent > 90)) {
+            } else if (data.storage && data.storage.some(p => WRITABLE_MOUNTS.includes(p.mount_point) && p.usage_percent > 90)) {
                 status = 'critical';
-            } else if (data.thermal && data.thermal.overall_status === 'warning') {
+            } else if (thermalStatus === 'warning') {
                 status = 'warning';
             } else if (data.battery && (data.battery.level < 30 || data.battery.temperature_c > 40)) {
                 status = 'warning';
-            } else if (data.storage && data.storage.some(p => p.usage_percent > 80)) {
+            } else if (data.storage && data.storage.some(p => WRITABLE_MOUNTS.includes(p.mount_point) && p.usage_percent > 80)) {
                 status = 'warning';
             } else if (data.network && !data.network.internet_reachable) {
                 status = 'warning';
@@ -1144,7 +1158,15 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action_names: actionNames, kwargs: {}, confirm: true })
                 });
-                const result = await response.json();
+                let result;
+                try {
+                    result = await response.json();
+                } catch (parseError) {
+                    throw new Error(`server error (HTTP ${response.status})`);
+                }
+                if (!response.ok) {
+                    throw new Error(result.error || `HTTP ${response.status}`);
+                }
                 
                 let html = `<div class="metric-row"><span class="metric-label"><strong>Completed: ${result.successful}/${result.total} successful</strong></span></div>`;
                 result.results.forEach(r => {
