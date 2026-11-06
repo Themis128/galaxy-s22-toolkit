@@ -1,0 +1,5 @@
+[project]
+name = "phone-system-update"
+version = "1.0.0"
+description = "OTA system-update driver skill (implementation: tools/system_update.py)"
+requires-python = ">=3.10"

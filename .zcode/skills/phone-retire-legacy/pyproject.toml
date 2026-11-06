@@ -1,0 +1,5 @@
+[project]
+name = "phone-retire-legacy"
+version = "1.0.0"
+description = "Legacy-tree decommission skill (implementation: tools/decommission_legacy.py)"
+requires-python = ">=3.10"
