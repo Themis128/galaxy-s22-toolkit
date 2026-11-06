@@ -1,6 +1,6 @@
 # Galaxy S22+ Toolkit
 
-Complete phone-management suite for a Samsung Galaxy S22+ (SM-S906B, Exynos international, rootable variant) over ADB: diagnostics, monitoring dashboard, approved auto-repair with desktop-toast approvals, file transfer, logcat, app management — plus guarded root support. Reaches the phone over USB or wireless ADB through Tailscale, with auto-reconnect after reboots.
+Complete phone-management suite for a Samsung Galaxy S22+ (SM-S906B, Exynos international, rootable variant) over ADB: diagnostics, monitoring dashboard, approved auto-repair with desktop-toast approvals, file transfer, logcat, app management — plus guarded root support. Adapts to any Galaxy S/Note/A on Android 10+ via the multi-Galaxy compatibility layer. Reaches the phone over USB or wireless ADB through Tailscale, with auto-reconnect after reboots. The Dockerized dashboard is **live on the tailnet** at `http://100.83.120.93:8081`.
 
 > **Root warning**: rooting requires unlocking the bootloader, which permanently
 > wipes data and trips the Knox eFuse (Samsung Pay/Wallet, Secure Folder, Samsung
@@ -9,7 +9,7 @@ Complete phone-management suite for a Samsung Galaxy S22+ (SM-S906B, Exynos inte
 ## Quickstart
 
 ```bash
-# 1. Install everything (phone-lib + 6 skills + rooting)
+# 1. Install everything (phone-lib + 12 skills + rooting)
 bash galaxy-s22-toolkit-skills/install.sh
 
 # Quickstart
@@ -19,12 +19,13 @@ phone-repair recommend          # repair actions suggested by diagnostics
 phone-repair run auto           # run all low-risk repairs (approval policy)
 phone-app-manager list          # installed apps
 phone-logcat errors --json      # crash/ANR detection
+phone-insights                  # degradation insights from metrics history
 
 # Real-time monitoring dashboard (8080 is occupied by another service here)
 python dashboard/app.py         # from repo root; serves http://127.0.0.1:8081
 
 # Or in Docker (reaches the phone over wireless ADB through the tailnet)
-docker compose up -d --build
+docker compose up -d --build    # host networking; live at 100.83.120.93:8081
 ```
 
 ## Commands
@@ -33,6 +34,11 @@ docker compose up -d --build
 |---|---|
 | `phone-diagnostics run` | Full health report (battery, storage, thermal, network, logcat) |
 | `phone-diagnostics device` | Device identity & OS info |
+| `phone-insights` | Battery drain rate, storage growth ETA, p95 memory/thermal verdicts |
+| `phone-update-check` | Security-patch age verdict; can open the system update screen |
+| `phone-doctor` | Environment health (ADB, tasks, backups, OneDrive artifacts) |
+| `phone-connect status\|connect\|reconnect` | Wireless ADB over Tailscale control |
+| `phone-relocate` | Move the repo out of OneDrive to the canonical `C:\dev` tree |
 | `phone-screen-control screenshot` | Capture PNG |
 | `phone-screen-control record --time 30` | 30 s screen recording |
 | `phone-file-transfer pull /sdcard/DCIM/Camera ./data/pulls` | Pull files with progress |
@@ -54,44 +60,42 @@ docker compose up -d --build
 ## Repository layout
 
 ```
-├── ARCHITECTURE.md      # layer diagram, API contract, safety model
+├── ARCHITECTURE.md      # topology, layer diagram, API contract, safety model
 ├── phone-lib/           # Layer 1: typed ADB wrapper (pkg name: galaxy-s22-toolkit)
 ├── diagnostics/         # Layer 2: scheduled health checks + config.yaml
-│                        #          (task_scheduler.xml - registered, daily 03:00, silent)
-├── .zcode/skills/       # Layer 3: 6 CLI skills (phone-diagnostics, phone-screen-control,
+│                        #          (schtasks: daily 03:00 diagnostics, 03:30 backup,
+│                        #           03:45 rollup — silent, registered)
+├── tools/               # 13 standalone utilities (doctor, insights, alerts,
+│                        #          backup/restore, dashboard_client, relocate_repo, …)
+├── .zcode/skills/       # Layer 3: 12 CLI skills (phone-diagnostics, phone-repair,
+│                        #          phone-insights, phone-connect, phone-screen-control,
 │                        #          phone-file-transfer, phone-logcat, phone-app-manager,
-│                        #          phone-repair)
-├── rooting/             # 7th package: phone-root CLI + RUNBOOK.md
+│                        #          phone-update-check, phone-doctor, phone-relocate,
+│                        #          phone-remote-control)
+├── rooting/             # 13th package: phone-root CLI + RUNBOOK.md
 ├── dashboard/           # Layer 4: FastAPI + WebSocket + Chart.js (+ Dockerfile, README)
-├── docker-compose.yml   # containerized dashboard over tailnet wireless ADB
+├── docker-compose.yml   # containerized dashboard over tailnet wireless ADB (host network)
 ├── galaxy-s22-toolkit-skills/   # unified installer (install.sh) — Devin-ready
 ├── scripts/             # termux bootstrap, wireless ADB setup, cleanup helpers
 ├── adb-workflow.sh|ps1  # original workflow scripts (reference)
 ├── data/                # runtime output (gitignored): phone-mirror, reports, artifacts
-└── storage/             # legacy OneDrive placeholder dir — do not use
+└── logs/                # diagnostics log + repair_history.jsonl (gitignored)
 ```
 
-## storage/ directory (legacy)
-
-`storage/` is a leftover OneDrive placeholder directory from earlier sessions. Its
-files exist only in the cloud and cannot be moved/read while the cloud provider is
-down. Phone data pulled from the device now lives in `data/phone-mirror/`. When
-OneDrive is running, finish the cleanup:
-
-```powershell
-powershell -File scripts/finish-storage-cleanup.ps1
-```
+Canonical location of this repo: `C:\dev\galaxy-s22-toolkit` (relocated out of
+OneDrive; the old tree is legacy). Keep it outside synced folders — OneDrive's
+read-only re-flagging corrupts live databases and git internals.
 
 ## For agents (Devin / ZCode)
 
-The 6 skills + rooting are pip-installed console commands, so any agent can use them
+The 12 skills + rooting are pip-installed console commands, so any agent can use them
 directly after one command:
 
 ```bash
 bash galaxy-s22-toolkit-skills/install.sh
 ```
 
-Details: [ARCHITECTURE.md](ARCHITECTURE.md) (data flow, API contract, safety model).
+Details: [ARCHITECTURE.md](ARCHITECTURE.md) (topology, data flow, API contract, safety model).
 
 ## PyPI Publishing (Trusted Publishing)
 

@@ -13,6 +13,9 @@ A comprehensive Python ADB wrapper library for Samsung Galaxy S22+ (SM-S906B) di
 - **Thermal Monitoring** - Zone temperatures, throttling detection, CPU/GPU thermal status
 - **App Management** - List/install/uninstall, permissions, cache/data clearing, freeze/thaw
 - **Screen Control** - Screenshots, screen recording, UI dumps, input simulation
+- **Root/Magisk** - Root state, Knox status, confirm-gated privileged ops, module markers
+- **Multi-Galaxy profiles** - `phone.capabilities.detect_profile()`: marketing name, series, chipset, One UI; unknown models degrade to raw codes, never hard-fail
+- **Repair Actions** - ~20 audited actions with approval policy and JSONL history
 
 ## Installation
 
@@ -95,6 +98,8 @@ asyncio.run(main())
 | `thermal` | `ThermalModule` | Thermal zones, throttling status |
 | `apps` | `AppsModule` | Package management, permissions |
 | `screen` | `ScreenModule` | Screenshots, recording, UI dumps |
+| `root` | `RootModule` | Root/Magisk state, confirm-gated privileged ops, module markers |
+| `capabilities` | `detect_profile` | Multi-Galaxy DeviceProfile: marketing name, series, chipset, One UI |
 | `repair` | `RepairModule` | Approved repair actions with persistent JSONL history |
 | `notify` | `DesktopNotifier` | Windows toast notifications with Approve/Deny buttons |
 | `paths` | `confined_path` | Path confinement (resolve + fixed-root verification) |

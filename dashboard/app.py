@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import subprocess
 import sys
 from collections.abc import AsyncIterator
@@ -33,6 +34,7 @@ from fastapi import (  # noqa: E402
     WebSocket,
     WebSocketDisconnect,
 )
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import HTMLResponse, JSONResponse  # noqa: E402
 from fastapi.security import APIKeyHeader  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
@@ -190,7 +192,9 @@ def _collect_once() -> dict[str, Any]:
     cpu_raw = client.device.get_cpu_info()
     mem = client.device.get_memory_info()
     running = client.apps.get_running_apps()
-    rooted = client.root.is_rooted()
+    # Full root/Magisk state for the root card (cheap when unrooted: one
+    # `which su` + Knox getprops per tick).
+    root_info = client.root.get_root_info()
 
     # Detect device profile for multi-Galaxy compatibility
     device_profile = detect_profile(client.device)
@@ -244,6 +248,8 @@ def _collect_once() -> dict[str, Any]:
             "plugged_type": battery.plugged_type,
             "current_capacity_mah": battery.current_capacity_mah,
             "charge_cycles": battery.charge_cycles,
+            "current_ma": battery.current_ma,
+            "charge_counter_uah": battery.charge_counter_uah,
         },
         "storage": [
             {
@@ -291,7 +297,14 @@ def _collect_once() -> dict[str, Any]:
             else 0.0,
         },
         "apps": {"running_count": len(running), "running": running[:10]},
-        "root": {"rooted": rooted},
+        "root": {
+            "rooted": root_info.rooted,
+            "su_path": root_info.su_path,
+            "magisk_version": root_info.magisk_version,
+            "denylist_enabled": root_info.denylist_enabled,
+            "modules_dir_present": root_info.modules_dir_present,
+            "knox_status": root_info.knox_status,
+        },
     }
     return snapshot
 
@@ -328,8 +341,10 @@ async def collector_loop() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Start/stop the background collector around the app lifetime."""
-    # Initialize metrics database
+    global manager
+    # Initialize metrics database and WebSocket manager
     init_metrics_db(max_snapshots=MAX_DB_SNAPSHOTS)
+    manager = ConnectionManager()
     task = asyncio.create_task(collector_loop())
     yield
     task.cancel()
@@ -337,6 +352,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await task
     except asyncio.CancelledError:
         pass
+    manager = None
 
 
 app = FastAPI(
@@ -344,6 +360,15 @@ app = FastAPI(
     description="Real-time device monitoring via ADB (Samsung Galaxy S/Note/A)",
     version="1.0.0",
     lifespan=lifespan,
+)
+
+# Add CORS middleware to allow ZCode integrated browser and other origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -588,6 +613,9 @@ async def api_insights() -> JSONResponse:
 async def ws_live(websocket: WebSocket) -> None:
     """Live updates: initial snapshot, then collector broadcasts."""
     if manager is None:
+        await websocket.accept()
+        await websocket.send_json({"type": "error", "data": "service not ready"})
+        await websocket.close(code=1011)
         return
     await manager.connect(websocket)
     try:
@@ -830,6 +858,99 @@ async def api_repair_history() -> JSONResponse:
         {
             "history": [_repair_result_json(r) for r in repair_module.history],
             "total": len(repair_module.history),
+        }
+    )
+
+
+# ===== Root / Magisk API (root card) =====
+
+# Magisk module ids are directory names under /data/adb/modules; this
+# whitelist keeps shell metacharacters and path traversal out of the su
+# command line.
+_MODULE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+_MODULE_ACTIONS = ("enable", "disable", "remove")
+
+
+class ModuleActionRequest(BaseModel):
+    """Request model for Magisk module state changes (confirm-gated)."""
+
+    confirm: bool = False
+
+
+def _root_client_or_503() -> tuple[Any, JSONResponse | None]:
+    """Live client for root endpoints, or the 503 response to return."""
+    try:
+        return _ensure_client(), None
+    except (ConnectionError, OSError) as exc:
+        return None, JSONResponse(
+            {"error": f"Device not connected: {exc}"}, status_code=503
+        )
+
+
+@app.get("/api/root")
+async def api_root() -> JSONResponse:
+    """Full root/Magisk state (root card source of truth)."""
+    c, err = _root_client_or_503()
+    if err is not None:
+        return err
+    info = await asyncio.get_running_loop().run_in_executor(None, c.root.get_root_info)
+    return JSONResponse({"root": info.model})
+
+
+@app.get("/api/root/modules")
+async def api_root_modules() -> JSONResponse:
+    """List installed Magisk modules (empty list pre-root)."""
+    c, err = _root_client_or_503()
+    if err is not None:
+        return err
+    modules = await asyncio.get_running_loop().run_in_executor(None, c.root.list_modules)
+    return JSONResponse({"modules": modules, "total": len(modules)})
+
+
+@app.post("/api/root/modules/{module_id}/{action}")
+async def api_root_module_action(module_id: str, action: str, request: ModuleActionRequest) -> JSONResponse:
+    """Enable/disable/remove a Magisk module. Requires `confirm: true`."""
+    if action not in _MODULE_ACTIONS:
+        return JSONResponse(
+            {"error": f"Unknown module action: {action}. Use enable|disable|remove"},
+            status_code=400,
+        )
+    if not _MODULE_ID_RE.fullmatch(module_id):
+        return JSONResponse({"error": "Invalid module id"}, status_code=400)
+    if not request.confirm:
+        return JSONResponse(
+            {
+                "status": "confirmation_required",
+                "module_id": module_id,
+                "action": action,
+                "message": "Module changes require explicit confirmation (set confirm=true).",
+            },
+            status_code=202,
+        )
+
+    c, err = _root_client_or_503()
+    if err is not None:
+        return err
+    loop = asyncio.get_running_loop()
+    try:
+        await loop.run_in_executor(
+            None, c.root.set_module_state, module_id, action, True
+        )
+    except Exception as exc:  # noqa: BLE001 - surface su failures honestly
+        return JSONResponse(
+            {"success": False, "error": str(exc), "module_id": module_id, "action": action},
+            status_code=500,
+        )
+    return JSONResponse(
+        {
+            "success": True,
+            "module_id": module_id,
+            "action": action,
+            "message": (
+                f"Module {module_id} {action}d. Takes effect on the next reboot "
+                "(disable/remove are marker files Magisk applies at boot)."
+            ),
         }
     )
 

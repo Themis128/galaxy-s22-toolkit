@@ -3,6 +3,33 @@
 All notable changes to the Galaxy toolkit. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); dates are ISO 8601.
 
+## [0.5.0] - 2026-11-06
+
+### Added
+- **Root/Magisk dashboard API + card**: `GET /api/root` (full root state incl.
+  Knox), `GET /api/root/modules`, and a confirm-gated
+  `POST /api/root/modules/{id}/{action}` (202 confirmation_required unless
+  `"confirm": true`; module ids whitelisted `^[A-Za-z0-9][A-…-]{0,127}$`).
+  The dashboard root card now shows Magisk version, denylist, Knox status and
+  an expandable module manager (enable/disable/remove with browser confirm()).
+- **Device profile in every snapshot**: `/api/health` and `/ws/live` now carry
+  `device_profile` (marketing name, series, chipset, One UI) so the Device
+  Info card shows all fields; battery section adds `current_ma` +
+  `charge_counter_uah` (sysfs fallback with µA-vs-mA magnitude check), fixing
+  the "undefined mA" battery card.
+- **CORS allow-all** so tailnet browsers (ZCode integrated browser, phone)
+  can call the API cross-origin; host-nightly pipeline documented.
+- **Docs overhaul**: ARCHITECTURE.md rewritten (tailnet deployment topology,
+  full API contract incl. root/trends/devin, multi-Galaxy layer, updated
+  safety model); README/dashboard/phone-lib READMEs refreshed (12 skills,
+  13 tools, 300+ tests); BACKLOG.md reset to the real remaining state.
+
+### Fixed
+- Docker: container rebuilt with `network_mode: host` + `PHONE_ADB_HOST` so
+  it shares the tailnet and reaches the phone directly (bridge mode had no
+  route to 100.84.31.85:5555).
+- dashboard/README WS cadence corrected (5 s broadcasts, was "1 s").
+
 ## [0.4.0] - 2026-11-06
 
 ### Added

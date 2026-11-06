@@ -374,12 +374,30 @@
 
             <!-- Root Card -->
             <div class="card">
-                <div class="card-header">🔓 Root</div>
+                <div class="card-header">🔓 Root / Magisk</div>
                 <div class="card-body">
                     <div class="metric-row">
                         <span class="metric-label">Rooted</span>
                         <span class="metric-value" id="root-status">--</span>
                     </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Magisk</span>
+                        <span class="metric-value" id="root-magisk">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Denylist</span>
+                        <span class="metric-value" id="root-denylist">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Knox</span>
+                        <span class="metric-value" id="root-knox">--</span>
+                    </div>
+                </div>
+                <div id="root-modules-section" style="display:none; padding: 0 0.25rem 0.5rem;">
+                    <div style="padding: 0 0.75rem;">
+                        <button class="btn" id="root-modules-refresh" style="width:100%;">📦 Load Magisk modules</button>
+                    </div>
+                    <div id="root-modules-list" style="padding: 0.5rem 1rem 0.75rem; font-size: 0.85rem;">Modules not loaded</div>
                 </div>
             </div>
 
@@ -676,13 +694,24 @@
 
             // Root
             if (data.root) {
-                document.getElementById('root-status').textContent =
-                    data.root.rooted ? 'Yes' : 'No';
+                const r = data.root;
+                document.getElementById('root-status').textContent = r.rooted ? 'Yes' : 'No';
+                document.getElementById('root-magisk').textContent = r.magisk_version || 'N/A';
+                document.getElementById('root-denylist').textContent =
+                    r.rooted ? (r.denylist_enabled ? 'On' : 'Off') : 'N/A';
+                document.getElementById('root-knox').textContent = r.knox_status || 'unknown';
+                const modSec = document.getElementById('root-modules-section');
+                if (r.rooted && r.modules_dir_present) {
+                    modSec.style.display = 'block';
+                    if (!rootModulesLoaded) loadRootModules();
+                } else {
+                    modSec.style.display = 'none';
+                }
             }
 
             // Device
             if (data.device) {
-                updateDevice(data.device);
+                updateDevice(data.device, data.device_profile);
             }
             
             // Overall status
@@ -701,7 +730,8 @@
             document.getElementById('battery-temp').className = `metric-value ${b.temperature_c > 40 ? 'critical' : b.temperature_c > 35 ? 'warning' : 'good'}`;
             
             document.getElementById('battery-voltage').textContent = `${b.voltage_mv} mV`;
-            document.getElementById('battery-current').textContent = `${b.current_ma} mA`;
+            document.getElementById('battery-current').textContent =
+                `${b.current_ma ?? 'N/A'} mA`;
             document.getElementById('battery-cycles').textContent = b.charge_cycles || 'N/A';
             
             // Update chart
@@ -718,6 +748,57 @@
             }
             charts.battery.update('none');
         }
+
+        // ===== Root card: Magisk module manager =====
+        let rootModulesLoaded = false;
+
+        async function loadRootModules() {
+            const list = document.getElementById('root-modules-list');
+            try {
+                const res = await fetch('/api/root/modules');
+                if (!res.ok) {
+                    list.textContent = `unavailable (HTTP ${res.status})`;
+                    return;
+                }
+                const data = await res.json();
+                rootModulesLoaded = true;
+                list.innerHTML = (data.modules || []).length === 0
+                    ? '<div style="opacity:.7;">No Magisk modules installed</div>'
+                    : (data.modules || []).map(m => `
+                        <div class="metric-row">
+                            <span class="metric-label">${m.id}</span>
+                            <span class="metric-value" style="font-size: 0.8rem;">
+                                ${m.disabled ? 'disabled' : 'enabled'}${m.pending_removal ? ' · remove pending' : ''}
+                                <button class="btn" style="padding:0.15rem 0.5rem; font-size:0.7rem; margin-left:0.4rem;"
+                                    onclick="moduleAction('${m.id}', '${m.disabled ? 'enable' : 'disable'}')">${m.disabled ? 'Enable' : 'Disable'}</button>
+                                <button class="btn" style="padding:0.15rem 0.5rem; font-size:0.7rem; margin-left:0.2rem;"
+                                    onclick="moduleAction('${m.id}', 'remove')">Remove</button>
+                            </span>
+                        </div>
+                    `).join('');
+            } catch (e) {
+                list.textContent = 'unavailable';
+            }
+        }
+
+        async function moduleAction(moduleId, action) {
+            if (!confirm(`Magisk module "${moduleId}": ${action}?` +
+                ' Takes effect at next boot (marker file under /data/adb/modules).')) return;
+            try {
+                const res = await fetch(`/api/root/modules/${encodeURIComponent(moduleId)}/${action}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({confirm: true})
+                });
+                const data = await res.json();
+                alert(data.message || data.error || (res.status === 202 ? 'needs confirm' : 'done'));
+                loadRootModules();
+            } catch (e) {
+                alert('Module action failed: ' + e);
+            }
+        }
+
+        document.getElementById('root-modules-refresh').addEventListener('click', loadRootModules);
         
         function updateStorage(partitions) {
             const container = document.getElementById('storage-partitions');
@@ -747,24 +828,29 @@
         }
         
         function updateThermal(t) {
-            document.getElementById('thermal-status').textContent = t.overall_status.toUpperCase();
-            document.getElementById('thermal-status').className = `metric-value ${t.overall_status === 'critical' ? 'critical' : t.overall_status === 'warning' ? 'warning' : 'good'}`;
+            // API returns: status, cpu_throttled, gpu_throttled, zones (name, temp_c, type)
+            const overallStatus = t.status || 'unknown';
+            document.getElementById('thermal-status').textContent = overallStatus.toUpperCase();
+            document.getElementById('thermal-status').className = `metric-value ${overallStatus === 'critical' ? 'critical' : overallStatus === 'warning' ? 'warning' : 'good'}`;
             
-            document.getElementById('thermal-cpu').textContent = t.cpu_throttling ? 'YES ⚠️' : 'No';
-            document.getElementById('thermal-cpu').className = `metric-value ${t.cpu_throttling ? 'critical' : 'good'}`;
+            const cpuThrottled = t.cpu_throttled || false;
+            document.getElementById('thermal-cpu').textContent = cpuThrottled ? 'YES ⚠️' : 'No';
+            document.getElementById('thermal-cpu').className = `metric-value ${cpuThrottled ? 'critical' : 'good'}`;
             
-            document.getElementById('thermal-gpu').textContent = t.gpu_throttling ? 'YES ⚠️' : 'No';
-            document.getElementById('thermal-gpu').className = `metric-value ${t.gpu_throttling ? 'critical' : 'good'}`;
+            const gpuThrottled = t.gpu_throttled || false;
+            document.getElementById('thermal-gpu').textContent = gpuThrottled ? 'YES ⚠️' : 'No';
+            document.getElementById('thermal-gpu').className = `metric-value ${gpuThrottled ? 'critical' : 'good'}`;
             
             const zonesContainer = document.getElementById('thermal-zones');
             zonesContainer.innerHTML = '';
             
             let maxTemp = 0;
-            t.zones.forEach(z => {
+            (t.zones || []).forEach(z => {
                 if (z.temp_c > 0) {
                     maxTemp = Math.max(maxTemp, z.temp_c);
                     const badge = document.createElement('span');
-                    badge.className = `zone-badge ${z.is_critical ? 'critical' : z.temp_c > 45 ? 'warning' : 'normal'}`;
+                    // No is_critical in API, derive from temp
+                    badge.className = `zone-badge ${z.temp_c > 50 ? 'critical' : z.temp_c > 45 ? 'warning' : 'normal'}`;
                     badge.textContent = `${z.name}: ${z.temp_c.toFixed(1)}°C (${z.type})`;
                     zonesContainer.appendChild(badge);
                 }
@@ -787,7 +873,8 @@
             const isMobile = n.mobile_connected;
             
             document.getElementById('network-type').textContent = isWifi ? 'Wi-Fi' : isMobile ? 'Mobile' : 'None';
-            document.getElementById('network-name').textContent = isWifi ? n.wifi_ssid : isMobile ? n.mobile_operator : 'N/A';
+            // API returns mobile_type, not mobile_operator
+            document.getElementById('network-name').textContent = isWifi ? n.wifi_ssid : isMobile ? n.mobile_type : 'N/A';
             
             const signal = isWifi ? n.wifi_signal_dbm : n.mobile_signal_dbm;
             document.getElementById('network-signal').textContent = `${signal} dBm`;
@@ -829,22 +916,22 @@
             }
         }
         
-        function updateDevice(d) {
+        function updateDevice(d, profile) {
             document.getElementById('device-model').textContent = d.model;
             document.getElementById('device-android').textContent = d.android_version;
             document.getElementById('device-api').textContent = d.api_level;
             document.getElementById('device-patch').textContent = d.security_patch || 'Unknown';
-            
-            // Device profile info (if available)
-            if (d.device_profile) {
-                const dp = d.device_profile;
+
+            // Device profile (top-level `device_profile` in the snapshot)
+            const dp = profile || d.device_profile;
+            if (dp) {
                 document.getElementById('device-marketing').textContent = dp.marketing_name || 'N/A';
                 document.getElementById('device-series').textContent = dp.series || 'N/A';
                 document.getElementById('device-chipset').textContent = dp.chipset || 'N/A';
                 document.getElementById('device-oneui').textContent = dp.one_ui || 'N/A';
-                
+
                 // Update dashboard title with model-specific branding
-                const title = dp.marketing_name && dp.marketing_name !== 'unknown' 
+                const title = dp.marketing_name && dp.marketing_name !== 'unknown'
                     ? `Galaxy ${dp.marketing_name} (${dp.model})`
                     : `Galaxy ${dp.model}`;
                 document.getElementById('dashboard-title').textContent = title;

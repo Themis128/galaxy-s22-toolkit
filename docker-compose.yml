@@ -3,6 +3,11 @@ services:
     build:
       context: .
       dockerfile: dashboard/Dockerfile
+    # Bridge + published port: on Docker Desktop (Windows), `network_mode: host`
+    # puts the container in the VM's netns — it has NO tailnet route, so the
+    # phone's tailnet IP is unreachable from inside. The phone's LAN IP
+    # (192.168.1.77) IS reachable (both devices share the LAN), and the
+    # published 8081 keeps the tailnet URL 100.83.120.93:8081 working.
     ports:
       - "8081:8081"
     restart: unless-stopped
@@ -10,8 +15,9 @@ services:
       DASHBOARD_PORT: "8081"
       DASHBOARD_HOST: "0.0.0.0"   # container must bind all interfaces for published ports
       GROQ_BOT_API_KEY: ${GROQ_BOT_API_KEY:-dev-key-change-in-production}
-      # Phone's tailnet IP (galaxy-s22); wireless ADB must be on (adb tcpip 5555)
-      PHONE_ADB_HOST: ${PHONE_ADB_HOST:-100.84.31.85}
+      # Phone's LAN IP (galaxy-s22 at 192.168.1.77); wireless ADB must be on
+      # (`adb tcpip 5555`). The tailnet IP only works with true host networking.
+      PHONE_ADB_HOST: ${PHONE_ADB_HOST:-192.168.1.77}
     volumes:
       # Reuse the host's already-authorized ADB keys so the phone does not
       # need to approve a new key for the container
