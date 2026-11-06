@@ -223,24 +223,41 @@ class RepairModule:
             auto_approve=True,
         ),
     ]
-    # Samsung bloatware packages safe to disable (user can re-enable)
-    SAMSUNG_BLOATWARE = [
-        "com.samsung.android.app.spage",  # Samsung Daily/Free
-        "com.samsung.android.app.watchmanagerstub",  # Galaxy Watch plugin
-        "com.samsung.android.ardrawing",  # AR Drawing
-        "com.samsung.android.aremoetd",  # AR Emoji Editor
-        "com.samsung.android.app.routines",  # Modes and Routines (if not used)
-        "com.samsung.android.ipservice",  # IP Service
-        "com.samsung.android.svoice.sync",  # S Voice sync
-        "com.samsung.android.voc",  # Voice control
-        "com.sec.android.app.samsungapps",  # Galaxy Store
-        "com.samsung.android.game.gos",  # Game Optimizing Service
-        "com.samsung.android.hmt.vrsvc",  # VR Service
-        "com.samsung.android.spay",  # Samsung Pay (if not used)
-        "com.samsung.android.mateagent",  # Mate Agent
-        "com.samsung.android.fmm",  # Find My Mobile
-        "com.samsung.android.scloud.oauth",  # Samsung Cloud OAuth
-    ]
+    # Samsung bloatware packages safe to disable, grouped by One-UI generation.
+    # Key = minimum One-UI major version (int). Entries in lower generations are
+    # also applicable to newer ones (backwards compatibility).
+    # Unknown/untagged entries default to generation 1 (always considered).
+    SAMSUNG_BLOATWARE_BY_GEN: dict[int, list[str]] = {
+        1: [
+            # Pre-One UI / TouchWiz era - always applicable
+            "com.samsung.android.app.spage",  # Samsung Daily/Free (One UI 1+)
+            "com.samsung.android.app.watchmanagerstub",  # Galaxy Watch plugin
+            "com.samsung.android.ardrawing",  # AR Drawing
+            "com.samsung.android.aremoetd",  # AR Emoji Editor
+            "com.samsung.android.ipservice",  # IP Service
+            "com.samsung.android.voc",  # Voice control
+            "com.sec.android.app.samsungapps",  # Galaxy Store
+            "com.samsung.android.spay",  # Samsung Pay
+            "com.samsung.android.fmm",  # Find My Mobile
+            "com.samsung.android.scloud.oauth",  # Samsung Cloud OAuth
+        ],
+        2: [
+            # One UI 2.x (Android 10) - S10/Note10 era
+            "com.samsung.android.svoice.sync",  # S Voice sync (deprecated in newer)
+            "com.samsung.android.game.gos",  # Game Optimizing Service
+            "com.samsung.android.hmt.vrsvc",  # VR Service
+            "com.samsung.android.mateagent",  # Mate Agent
+        ],
+        4: [
+            # One UI 4.x (Android 12) - S21/Note20 era
+            "com.samsung.android.app.routines",  # Modes and Routines
+        ],
+    }
+
+    # Convenience flat list for backward-compat and display (all generations)
+    SAMSUNG_BLOATWARE: list[str] = []
+    for _gen in sorted(SAMSUNG_BLOATWARE_BY_GEN):
+        SAMSUNG_BLOATWARE.extend(SAMSUNG_BLOATWARE_BY_GEN[_gen])
 
     def __init__(
         self,

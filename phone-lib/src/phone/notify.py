@@ -43,10 +43,12 @@ class DesktopNotifier:
 
     Args:
         app_id: Toast sender identity shown in the notification.
+                Default kept for backward compatibility; callers should
+                pass a model-specific brand (e.g., via phone.capabilities.describe_model()).
         dashboard_url: Optional URL opened when a notification body is clicked.
     """
 
-    def __init__(self, app_id: str = "Galaxy S22+ Toolkit", dashboard_url: str | None = None):
+    def __init__(self, app_id: str = "Galaxy Toolkit", dashboard_url: str | None = None):
         self.app_id = app_id
         self.last_error: str | None = None
         self.dashboard_url = dashboard_url

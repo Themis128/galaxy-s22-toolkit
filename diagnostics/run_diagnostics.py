@@ -35,6 +35,7 @@ from phone import (
     ThermalModule,
     create_client,
     describe_model,
+    detect_profile,
 )
 from phone.models import (
     BatteryHealth,
@@ -79,6 +80,7 @@ class DiagnosticsRunner:
         self.results: list[CheckResult] = []
         self.start_time = datetime.now()
         self.output_root = Path(__file__).resolve().parent
+        self.device_profile: Any = None  # DeviceProfile from detect_profile()
         self._setup_logging()
 
     def _load_config(self) -> DiagnosticConfig:
@@ -124,6 +126,15 @@ class DiagnosticsRunner:
             f"Connected to device: {getattr(self.client, 'serial', None) or 'auto-detect'}"
         )
 
+        # Detect device profile for multi-Galaxy compatibility
+        try:
+            device_module = DeviceModule(self.client)
+            self.device_profile = detect_profile(device_module)
+            self.logger.info(f"Detected profile: {describe_model(self.device_profile.model)}")
+        except Exception as e:
+            self.logger.warning(f"Could not detect device profile: {e}")
+            self.device_profile = None
+
     def _run_check(self, name: str, check_func: Any, *args: Any, **kwargs: Any) -> CheckResult:
         """Run a single check with timing and error handling."""
         start = time.perf_counter()
@@ -159,6 +170,16 @@ class DiagnosticsRunner:
             "build_fingerprint": info.build_fingerprint,
             "is_rooted": device.is_rooted(),
         }
+
+        # Add device profile details for multi-Galaxy compatibility
+        if self.device_profile:
+            details["profile"] = {
+                "marketing_name": self.device_profile.marketing_name,
+                "series": self.device_profile.series,
+                "chipset": self.device_profile.chipset,
+                "one_ui": self.device_profile.one_ui,
+                "flags": list(self.device_profile.flags),
+            }
 
         # Check security patch age
         patch_age_days = 0
@@ -575,6 +596,7 @@ class DiagnosticsRunner:
             checks=[asdict(r) for r in self.results],
             overall_status=overall,
             summary_text=summary,
+            device_profile=self.device_profile,
         )
 
         return report
@@ -673,10 +695,16 @@ class DiagnosticsRunner:
         assert report.battery is not None, "report.battery must be populated"
         assert report.network is not None, "report.network must be populated"
         assert report.thermal is not None, "report.thermal must be populated"
+
+        # Build device branding with profile info if available
+        device_brand = describe_model(report.device.model)
+        if hasattr(report, "device_profile") and report.device_profile:
+            profile = report.device_profile
+            device_brand = f"{describe_model(profile.model)} (Series: {profile.series}, Chipset: {profile.chipset}, One UI: {profile.one_ui}, API: {profile.api_level})"
+
         lines = [
             "=" * 60,
-            f"{describe_model(report.device.model)} Health Report - "
-            f"{report.timestamp.strftime('%Y-%m-%d %H:%M:%S')}",
+            f"{device_brand} Health Report - {report.timestamp.strftime('%Y-%m-%d %H:%M:%S')}",
             "=" * 60,
             "",
             f"Device: {report.device.model} (Android {report.device.android_version}, "

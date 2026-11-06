@@ -75,9 +75,18 @@ class ThermalModule:
                 continue
             if section == "hal" and stripped.startswith("Temperature{"):
                 try:
+                    # mValue can be in millicelsius (e.g., 35900 = 35.9°C) or
+                    # already in Celsius (e.g., 35.0 = 35.0°C). Heuristic:
+                    # if value >= 200, assume millicelsius.
                     value = float(stripped.split("mValue=")[1].split(",")[0])
+                    if value >= 200:
+                        value = value / 1000.0
                     name = stripped.split("mName=")[1].split(",")[0]
-                    zones.append(ThermalZone(name=name, temp_c=value, type="hal"))
+                    # Extract mType if present (e.g., mType=cpu, mType=gpu, mType=battery)
+                    zone_type = "hal"
+                    if "mType=" in stripped:
+                        zone_type = stripped.split("mType=")[1].split(",")[0].strip()
+                    zones.append(ThermalZone(name=name, temp_c=value, type=zone_type))
                 except (IndexError, ValueError):
                     continue
             elif section == "hal" and stripped and not stripped.startswith("Temperature{"):

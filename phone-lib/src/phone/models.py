@@ -438,6 +438,8 @@ class HealthReport:
     checks: list[dict[str, Any]] = field(default_factory=list)
     overall_status: str = "healthy"
     summary_text: str = ""
+    # Multi-Galaxy compatibility: device capability profile (optional)
+    device_profile: Any = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""

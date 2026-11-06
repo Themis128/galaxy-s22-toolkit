@@ -21,7 +21,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "phone-lib" / "src"))
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from diagnostics.run_diagnostics import DiagnosticsRunner  # noqa: E402
-from phone import create_client  # noqa: E402
+from phone import create_client, describe_model  # noqa: E402
 from phone.notify import DesktopNotifier  # noqa: E402
 from phone.repair import RepairAction, RepairModule, RepairResult  # noqa: E402
 
@@ -72,8 +72,9 @@ class InteractiveRepairCLI:
                 return False
 
             device_info = self.client.device.get_device_info()
+            device_brand = describe_model(device_info.model)
             print(
-                f"✅ Connected to {device_info.model} (Android {device_info.android_version}, API {device_info.api_level})"
+                f"✅ Connected to {device_brand} (Android {device_info.android_version}, API {device_info.api_level})"
             )
 
             # Desktop toast notifications (optional; console fallback below)
@@ -81,7 +82,7 @@ class InteractiveRepairCLI:
                 # Deep-link must match the dashboard's actual port
                 dash_port = os.getenv("DASHBOARD_PORT", "8081")
                 self.notifier = DesktopNotifier(
-                    app_id="Galaxy Toolkit",
+                    app_id=f"{device_brand} Toolkit",
                     dashboard_url=f"http://127.0.0.1:{dash_port}",
                 )
 

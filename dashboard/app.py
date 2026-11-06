@@ -43,8 +43,10 @@ from dashboard.metrics_db import get_metrics_db, init_metrics_db  # noqa: E402
 
 if TYPE_CHECKING:
     from phone import create_client
+    from phone.capabilities import detect_profile
 else:
     from phone import create_client  # type: ignore[import-untyped]
+    from phone.capabilities import detect_profile  # type: ignore[import-untyped]
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -190,6 +192,9 @@ def _collect_once() -> dict[str, Any]:
     running = client.apps.get_running_apps()
     rooted = client.root.is_rooted()
 
+    # Detect device profile for multi-Galaxy compatibility
+    device_profile = detect_profile(client.device)
+
     per_core_mhz = [c.get("cpu MHz", 0) for c in cpu_raw.get("details", []) if isinstance(c, dict)]
     if not any(per_core_mhz):
         # /proc/cpuinfo lacks freq on modern Android; read cpufreq sysfs instead
@@ -216,6 +221,17 @@ def _collect_once() -> dict[str, Any]:
             "android_version": device.android_version,
             "api_level": device.api_level,
             "security_patch": device.security_patch,
+        },
+        "device_profile": {
+            "model": device_profile.model,
+            "marketing_name": device_profile.marketing_name,
+            "series": device_profile.series,
+            "year_class": device_profile.year_class,
+            "chipset": device_profile.chipset,
+            "api_level": device_profile.api_level,
+            "one_ui": device_profile.one_ui,
+            "is_samsung": device_profile.is_samsung,
+            "flags": list(device_profile.flags),
         },
         "battery": {
             "level": battery.level,
@@ -324,7 +340,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title="Galaxy Monitoring Dashboard",
+    title="Galaxy Toolkit",
     description="Real-time device monitoring via ADB (Samsung Galaxy S/Note/A)",
     version="1.0.0",
     lifespan=lifespan,
