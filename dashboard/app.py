@@ -145,7 +145,13 @@ class ConnectionManager:
 
 
 def _device_wireless_settings() -> dict[str, Any] | None:
-    """device.wireless_adb from diagnostics/config.yaml (host-side fallback)."""
+    """device.wireless_adb from diagnostics/config.yaml (host-side fallback).
+
+    PHONE_ADB_HOST (set by docker-compose) overrides the config's tailnet
+    host: inside the container only the phone's LAN IP is reachable, so the
+    auto-reconnect must dial the same address the startup `adb connect`
+    used — otherwise a dropped transport can never self-heal.
+    """
     try:
         import yaml
 
@@ -154,6 +160,9 @@ def _device_wireless_settings() -> dict[str, Any] | None:
         wireless = device_cfg.get("wireless_adb") or None
         if wireless:
             wireless = {**wireless, "preferred_serial": device_cfg.get("serial")}
+        env_host = os.getenv("PHONE_ADB_HOST")
+        if env_host and wireless:
+            wireless["host"] = env_host
         return wireless
     except Exception:
         return None
