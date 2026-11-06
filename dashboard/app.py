@@ -904,9 +904,7 @@ def _root_client_or_503() -> tuple[Any, JSONResponse | None]:
     try:
         return _ensure_client(), None
     except (ConnectionError, OSError) as exc:
-        return None, JSONResponse(
-            {"error": f"Device not connected: {exc}"}, status_code=503
-        )
+        return None, JSONResponse({"error": f"Device not connected: {exc}"}, status_code=503)
 
 
 @app.get("/api/root")
@@ -930,7 +928,9 @@ async def api_root_modules() -> JSONResponse:
 
 
 @app.post("/api/root/modules/{module_id}/{action}")
-async def api_root_module_action(module_id: str, action: str, request: ModuleActionRequest) -> JSONResponse:
+async def api_root_module_action(
+    module_id: str, action: str, request: ModuleActionRequest
+) -> JSONResponse:
     """Enable/disable/remove a Magisk module. Requires `confirm: true`."""
     if action not in _MODULE_ACTIONS:
         return JSONResponse(
@@ -955,9 +955,7 @@ async def api_root_module_action(module_id: str, action: str, request: ModuleAct
         return err
     loop = asyncio.get_running_loop()
     try:
-        await loop.run_in_executor(
-            None, c.root.set_module_state, module_id, action, True
-        )
+        await loop.run_in_executor(None, c.root.set_module_state, module_id, action, True)
     except Exception as exc:  # noqa: BLE001 - surface su failures honestly
         return JSONResponse(
             {"success": False, "error": str(exc), "module_id": module_id, "action": action},
