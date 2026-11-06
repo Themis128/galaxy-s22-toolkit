@@ -774,22 +774,20 @@ async def api_repair_execute(request: RepairActionRequest) -> JSONResponse:
 
     result = await repair_module.execute_action(request.action_name, **request.kwargs)
     _notify_repair_toast(result)
-    return _repair_result_json(result)
+    return JSONResponse(_repair_result_json(result))
 
 
-def _repair_result_json(result: Any) -> JSONResponse:
-    """Serialize a RepairResult for API responses."""
-    return JSONResponse(
-        {
-            "action_name": result.action.name,
-            "success": result.success,
-            "message": result.message,
-            "details": result.details,
-            "duration_ms": result.duration_ms,
-            "timestamp": result.timestamp.isoformat(),
-            "requires_reboot": result.requires_reboot,
-        }
-    )
+def _repair_result_json(result: Any) -> dict[str, Any]:
+    """Serialize a RepairResult as a plain dict (nestable in JSON payloads)."""
+    return {
+        "action_name": result.action.name,
+        "success": result.success,
+        "message": result.message,
+        "details": result.details,
+        "duration_ms": result.duration_ms,
+        "timestamp": result.timestamp.isoformat(),
+        "requires_reboot": result.requires_reboot,
+    }
 
 
 def _repair_history_path() -> str | None:

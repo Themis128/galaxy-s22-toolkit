@@ -1279,27 +1279,28 @@
                     statsDiv.style.display = 'block';
                     statsDiv.innerHTML = `
                         <strong>Stats for ${metric.replace(/\./g, ' → ')} (${hours}h):</strong>
-                        <span style="margin-left: 1rem;">Min: ${s.min !== null ? s.min.toFixed(2) : 'N/A'}</span>
-                        <span style="margin-left: 1rem;">Max: ${s.max !== null ? s.max.toFixed(2) : 'N/A'}</span>
-                        <span style="margin-left: 1rem;">Avg: ${s.avg !== null ? s.avg.toFixed(2) : 'N/A'}</span>
+                        <span style="margin-left: 1rem;">Min: ${s.min_val !== null && s.min_val !== undefined ? s.min_val.toFixed(2) : 'N/A'}</span>
+                        <span style="margin-left: 1rem;">Max: ${s.max_val !== null && s.max_val !== undefined ? s.max_val.toFixed(2) : 'N/A'}</span>
+                        <span style="margin-left: 1rem;">Avg: ${s.avg_val !== null && s.avg_val !== undefined ? s.avg_val.toFixed(2) : 'N/A'}</span>
                         <span style="margin-left: 1rem;">Count: ${s.count}</span>
                     `;
                 }
-                
+
                 // Load trend data
                 let trendData = [];
                 let labels = [];
-                
+
                 if (granularity === 'hourly') {
                     const response = await fetch(`/api/trends/hourly/${encodeURIComponent(metric)}?hours=${hours}`);
                     const data = await response.json();
                     trendData = data.data || [];
-                    labels = trendData.map(d => new Date(d.hour_start_utc.replace(' ', 'T') + 'Z'));
+                    // API rows: {timestamp: "2026-11-06 15:00:00", value: 73.3}
+                    labels = trendData.map(d => new Date(String(d.timestamp).replace(' ', 'T') + 'Z'));
                 } else {
                     const response = await fetch(`/api/trends/daily/${encodeURIComponent(metric)}?days=${Math.ceil(hours/24)}`);
                     const data = await response.json();
                     trendData = data.data || [];
-                    labels = trendData.map(d => new Date(d.day_start_utc.replace(' ', 'T') + 'Z'));
+                    labels = trendData.map(d => new Date(String(d.timestamp).replace(' ', 'T') + 'Z'));
                 }
                 
                 // Destroy existing trend chart
@@ -1316,7 +1317,7 @@
                     chartContainer.style.display = 'block';
                     
                     const ctx = chartContainer.getContext('2d');
-                    const values = trendData.map(d => d.avg_value);
+                    const values = trendData.map(d => d.value);
                     
                     trendChart = new Chart(ctx, {
                         type: 'line',

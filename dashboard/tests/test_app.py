@@ -121,6 +121,53 @@ class TestBulkRepairRobustness:
         assert body["successful"] == 0
         assert body["total"] == 1
 
+    def test_execute_multiple_serializes_results(
+        self, api_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Successful batches serialize RepairResult dicts (regression: the
+        serializer returned JSONResponse objects, and nesting them crashed
+        JSON encoding -> bare text 500 on every real batch)."""
+        import types
+        from datetime import datetime
+
+        import dashboard.app as app_module
+        import phone.repair as repair_mod
+
+        class FakeModule:
+            AVAILABLE_ACTIONS = [
+                types.SimpleNamespace(
+                    name="noop", description="d", risk_level="low", auto_approve=True
+                )
+            ]
+
+            def __init__(self, *_args: object, **_kwargs: object) -> None:
+                pass
+
+            async def execute_multiple(self, *_a: object, **_k: object) -> object:
+                return [
+                    types.SimpleNamespace(
+                        action=types.SimpleNamespace(name="noop"),
+                        success=True,
+                        message="done",
+                        details={},
+                        duration_ms=12,
+                        timestamp=datetime(2026, 11, 6, 12, 0, 0),
+                        requires_reboot=False,
+                    )
+                ]
+
+        monkeypatch.setattr(repair_mod, "RepairModule", FakeModule)
+        monkeypatch.setattr(app_module, "client", object())  # past the 503 guard
+
+        r = api_client.post(
+            "/api/repair/execute-multiple",
+            json={"action_names": ["noop"], "kwargs": {}, "confirm": True},
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["successful"] == 1
+        assert body["results"][0]["action_name"] == "noop"
+
     def test_diagnostics_run_returns_json_on_runner_crash(
         self, api_client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
