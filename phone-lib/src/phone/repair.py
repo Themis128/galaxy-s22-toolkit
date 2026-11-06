@@ -880,10 +880,11 @@ class RepairModule:
             action=action,
             success=False,
             message=(
-                "Skipped: radio toggle requires the USB transport. Over wireless "
-                "ADB the disable step kills the connection the re-enable needs, "
-                "leaving the radio off and ADB unreachable (connect the phone "
-                "over USB and re-run)."
+                "Skipped: radio toggles need the USB transport, and this session "
+                "is wireless. Over wireless ADB the disable step kills the "
+                "connection the re-enable needs, leaving the radio off and ADB "
+                "unreachable. The dashboard container cannot use USB at all — "
+                f"run this from the host CLI instead: phone-repair run {action.name}"
             ),
         )
 
