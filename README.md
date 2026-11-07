@@ -1,6 +1,6 @@
 # Galaxy S22+ Toolkit
 
-Complete phone-management suite for a Samsung Galaxy S22+ (SM-S906B, Exynos international, rootable variant) over ADB: diagnostics, monitoring dashboard, approved auto-repair with desktop-toast approvals, file transfer, logcat, app management — plus guarded root support. Adapts to any Galaxy S/Note/A on Android 10+ via the multi-Galaxy compatibility layer. Reaches the phone over USB or wireless ADB through Tailscale, with auto-reconnect after reboots. The Dockerized dashboard is **live on the tailnet** at `http://100.83.120.93:8081`.
+Complete phone-management suite for a Samsung Galaxy S22+ (SM-S906B, Exynos international, rootable variant) over ADB: diagnostics, monitoring dashboard, approved auto-repair with desktop-toast approvals, file transfer, logcat, app management — plus guarded root support, **screen mirroring (scrcpy), device-file manager, resale-style verification, data recovery (trash + root-gated WhatsApp decrypt), WhatsApp official transfer guide, iPhone/iPad support (libimobiledevice), and a triple-gated Samsung firmware-repair wizard**. Adapts to any Galaxy S/Note/A on Android 10+ via the multi-Galaxy compatibility layer. Reaches the phone over USB or wireless ADB through Tailscale, with auto-reconnect after reboots. The Dockerized dashboard is **live on the tailnet** at `http://100.83.120.93:8081`.
 
 > **Root warning**: rooting requires unlocking the bootloader, which permanently
 > wipes data and trips the Knox eFuse (Samsung Pay/Wallet, Secure Folder, Samsung
@@ -9,7 +9,7 @@ Complete phone-management suite for a Samsung Galaxy S22+ (SM-S906B, Exynos inte
 ## Quickstart
 
 ```bash
-# 1. Install everything (phone-lib + 12 skills + rooting)
+# 1. Install everything (20 skills + rooting)
 bash galaxy-s22-toolkit-skills/install.sh
 
 # Quickstart
@@ -32,6 +32,13 @@ docker compose up -d --build    # host networking; live at 100.83.120.93:8081
 
 | Command | What it does |
 |---|---|
+| `phone-mirror start\|record\|stop` | Screen mirror & control via scrcpy (no root) |
+| `phone-verify` | Resale-style verification report (score /100, JSON+HTML) |
+| `phone-recover trash` | Pull MediaStore trash/deleted media (no root) |
+| `phone-recover whatsapp --confirm-key` | Root-gated WhatsApp backup decrypt + chat export |
+| `phone-whatsapp check\|guide` | Official WhatsApp QR chat-transfer guide |
+| `phone-ios info\|backup\|restore\|screenshot\|apps` | iPhone/iPad via libimobiledevice (no jailbreak) |
+| `phone-repair-system check\|flash` | Samsung firmware repair wizard (Heimdall, triple-gated) |
 | `phone-diagnostics run` | Full health report (battery, storage, thermal, network, logcat) |
 | `phone-diagnostics device` | Device identity & OS info |
 | `phone-insights` | Battery drain rate, storage growth ETA, p95 memory/thermal verdicts |

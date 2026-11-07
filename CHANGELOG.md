@@ -3,6 +3,39 @@
 All notable changes to the Galaxy toolkit. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); dates are ISO 8601.
 
+## [0.6.0] - 2026-11-07
+
+### Added — Full Mobile Suite (Wondershare-class, all open-source pillars)
+- **Screen Mirror & Control**: `phone-mirror start|record|stop|status` via
+  scrcpy 5.x over USB/wireless (no root); recordings finalize cleanly via
+  `--time-limit`; dashboard Mirror card.
+- **Device File Manager**: dashboard browse/pull/delete over ADB
+  (`/api/device/files*`, confirm-gated deletion, pulls land on the host via
+  the `./data/pulls` bind).
+- **Device Verification**: `phone-verify` — resale-style report (0-100 score,
+  per-category verdicts, JSON+HTML) computed locally.
+- **Data Recovery**: `phone-recover trash` (MediaStore .trashed-* pulls, no
+  root) and root-gated `phone-recover whatsapp --confirm-key` (key via su,
+  wa-crypt-tools decryption, 5000-message JSON export; honest
+  `requires_root` + Knox warning on unrooted phones).
+- **WhatsApp Transfer**: `phone-whatsapp check|guide` — drives the OFFICIAL
+  QR chat-transfer flow (no third party can merge into the E2E store).
+- **iOS pillar**: `phone-lib/imobile.py` (IMobileClient over libimobiledevice:
+  idevice_id/info/backup2/restore/screenshot/installer) + `phone-ios`
+  skill; honest degradation when the suite/driver is missing.
+- **System Repair wizard**: `phone-repair-system check|firmware|flash` —
+  Heimdall-based stock-firmware repair with a triple gate (--yes + validated
+  .tar.md5 + fresh backup), Knox note; nothing auto-flashes.
+- **doctor mobile-suite check** (scrcpy/heimdall/idevice_id with install
+  lines) + `tools/binfind.py` winget-aware binary finder.
+- Skills: 20 total, all real console commands (8 former doc-only skills
+  gained entry points in 0.6.0-dev).
+
+### Fixed
+- doctor's console-script shim silently ran fallback stubs for the
+  OneDrive/junk checks (sys.path was gated on __main__) — real read-only
+  flags now surface (25 found on first honest run).
+
 ## [0.5.0] - 2026-11-06
 
 ### Added
