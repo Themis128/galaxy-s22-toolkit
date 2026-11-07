@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "phone-whatsapp"
+version = "1.0.0"
+description = "WhatsApp official chat-transfer guide skill (implementation: tools/whatsapp_transfer.py)"
+requires-python = ">=3.10"
+
+[project.scripts]
+phone-whatsapp = "phone_whatsapp:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["phone_whatsapp"]

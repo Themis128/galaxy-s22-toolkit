@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "phone-recover"
+version = "1.0.0"
+description = "Data recovery skill - trash pull (no root) + root-gated WhatsApp decrypt (implementation: tools/recover_media.py)"
+requires-python = ">=3.10"
+
+[project.scripts]
+phone-recover = "phone_recover:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["phone_recover"]
