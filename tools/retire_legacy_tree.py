@@ -186,11 +186,27 @@ def _move_tree(src_dir: Path, dst_root: Path) -> tuple[int, list[tuple[str, str]
     return moved, skipped
 
 
+def _force_clear(path: Path) -> None:
+    """Clear read-only flags recursively (OneDrive re-flags everything)."""
+    if path.is_dir() and not path.is_symlink():
+        for dirpath, dirnames, filenames in os.walk(path):
+            for name in dirnames + filenames:
+                try:
+                    os.chmod(Path(dirpath) / name, 0o777 if name in dirnames else 0o666)
+                except OSError:
+                    continue
+    try:
+        path.chmod(0o777 if path.is_dir() else 0o666)
+    except OSError:
+        pass
+
+
 def _rmtree_except(root: Path, keep: set[str]) -> list[str]:
     removed = []
     for entry in sorted(root.iterdir()):
         if entry.name in keep:
             continue
+        _force_clear(entry)
         if entry.is_dir() and not entry.is_symlink():
             shutil.rmtree(entry, ignore_errors=True)
         else:
@@ -198,7 +214,8 @@ def _rmtree_except(root: Path, keep: set[str]) -> list[str]:
                 entry.unlink()
             except OSError:
                 pass
-        removed.append(entry.name)
+        if not entry.exists():
+            removed.append(entry.name)
     return removed
 
 
