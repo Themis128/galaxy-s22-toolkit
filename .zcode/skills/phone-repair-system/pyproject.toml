@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "phone-repair-system"
+version = "1.0.0"
+description = "Samsung system-repair wizard via Heimdall (implementation: tools/repair_system.py)"
+requires-python = ">=3.10"
+
+[project.scripts]
+phone-repair-system = "phone_repair_system:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["phone_repair_system"]

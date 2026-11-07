@@ -17,32 +17,13 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO))
+sys.path.insert(0, str(REPO / "tools"))
 
-if TYPE_CHECKING:
-    # Type-checking stubs for local modules
-    def find_artifacts(root: Path) -> list[Path]: ...
-    def find_readonly(root: Path) -> list[Path]: ...
-    def clear_flags(files: list[Path]) -> int: ...
-else:
-    if __name__ == "__main__":
-        sys.path.insert(0, str(REPO / "tools"))
-    try:
-        from clean_path_artifacts import find_artifacts
-        from fix_onedrive_attrs import clear_flags, find_readonly
-    except ImportError:
-
-        def find_artifacts(root: Path) -> list[Path]:
-            return []
-
-        def find_readonly(root: Path) -> list[Path]:
-            return []
-
-        def clear_flags(files: list[Path]) -> int:
-            return 0
-
+from tools.clean_path_artifacts import find_artifacts  # noqa: E402
+from tools.fix_onedrive_attrs import clear_flags, find_readonly  # noqa: E402
 
 failures = 0
 
@@ -175,19 +156,7 @@ def main() -> int:
     check_container()
     check_mobile_suite()
     if args.fix:
-        # Re-import at runtime (TYPE_CHECKING stubs don't exist at runtime)
-        try:
-            from clean_path_artifacts import find_artifacts as fa  # type: ignore[import-not-found]
-            from fix_onedrive_attrs import clear_flags  # type: ignore[import-not-found]
-        except ImportError:
-
-            def fa(root: Path) -> list[Path]:
-                return []
-
-            def clear_flags(files: list[Path]) -> int:
-                return 0
-
-        junk = fa(REPO)
+        junk = find_artifacts(REPO)
         for p in junk:
             try:
                 p.unlink()
