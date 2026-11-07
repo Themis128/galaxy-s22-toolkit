@@ -116,6 +116,19 @@ def save_manifest(manifest: dict[str, dict[str, Any]]) -> None:
     MANIFEST.write_text(json.dumps(manifest, indent=1), encoding="utf-8")
 
 
+def needs_pull(entry: dict[str, Any], manifest: dict[str, dict[str, Any]], full: bool) -> bool:
+    """Incremental decision for one remote entry (pure; unit-tested).
+
+    False only when NOT full, the manifest knows the file, size and mtime
+    both match, and the local copy exists."""
+    prev = manifest.get(entry["rel"])
+    if full or prev is None:
+        return True
+    if prev.get("size") != entry["size"] or prev.get("mtime") != entry["mtime"]:
+        return True
+    return not (MIRROR / entry["rel"]).exists()
+
+
 def run_backup(serial: str | None, full: bool = False) -> dict[str, Any]:
     if create_client is None:
         return {"status": "error", "error": "phone-lib not importable"}
@@ -132,13 +145,7 @@ def run_backup(serial: str | None, full: bool = False) -> dict[str, Any]:
             remote = e["remote"]
             dest = MIRROR / rel
             prev = manifest.get(rel)
-            if (
-                not full
-                and prev is not None
-                and prev.get("size") == e["size"]
-                and prev.get("mtime") == e["mtime"]
-                and dest.exists()
-            ):
+            if not needs_pull(e, manifest, full):
                 skipped += 1
                 continue
             try:

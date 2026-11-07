@@ -1133,6 +1133,25 @@ async def api_whatsapp_exports() -> JSONResponse:
     return JSONResponse({"exports": exports, "total": len(exports)})
 
 
+def _filter_messages(data: list[dict[str, Any]], q: str, chat: str, limit: int) -> dict[str, Any]:
+    """Search/chat-filter one decrypted export (pure; unit-tested)."""
+    q_lower = q.lower()
+    chat_lower = chat.lower()
+    messages = [
+        m
+        for m in data
+        if (not chat_lower or chat_lower in str(m.get("chat", "")).lower())
+        and (not q_lower or q_lower in str(m.get("text", "")).lower())
+    ]
+    chats = sorted({str(m.get("chat", "unknown")) for m in messages})
+    return {
+        "total_in_file": len(data),
+        "matches": len(messages),
+        "chats": chats,
+        "messages": messages[: max(0, min(limit, 2000))],
+    }
+
+
 @app.get("/api/whatsapp/chats")
 async def api_whatsapp_chats(
     file: str, q: str = "", chat: str = "", limit: int = 2000
@@ -1146,23 +1165,10 @@ async def api_whatsapp_chats(
     loop = asyncio.get_running_loop()
 
     def load_and_filter() -> dict[str, Any]:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        q_lower = q.lower()
-        chat_lower = chat.lower()
-        messages = [
-            m
-            for m in data
-            if (not chat_lower or chat_lower in str(m.get("chat", "")).lower())
-            and (not q_lower or q_lower in str(m.get("text", "")).lower())
-        ]
-        chats = sorted({str(m.get("chat", "unknown")) for m in messages})
-        return {
-            "file": file,
-            "total_in_file": len(data),
-            "matches": len(messages),
-            "chats": chats,
-            "messages": messages[: max(0, min(limit, 2000))],
-        }
+        data = cast(list[dict[str, Any]], json.loads(path.read_text(encoding="utf-8")))
+        result = _filter_messages(data, q, chat, limit)
+        result["file"] = file
+        return result
 
     try:
         return JSONResponse(await loop.run_in_executor(None, load_and_filter))
@@ -1182,39 +1188,53 @@ async def api_fleet() -> JSONResponse:
     loop = asyncio.get_running_loop()
 
     def enumerate_devices() -> dict[str, Any]:
-        registry: dict[str, Any] = {"known": []}
-        reg_path = PROJECT_ROOT / "data" / "fleet.json"
-        try:
-            registry["known"] = json.loads(reg_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            pass
-        out = client.execute("devices", "-l") if client else ""
-        attached = []
-        for line in out.splitlines()[1:]:
-            if not line.strip():
-                continue
-            parts = line.split()
-            serial = parts[0]
-            state = parts[1] if len(parts) > 1 else "unknown"
-            model = next((p.split(":")[1] for p in parts if p.startswith("model:")), "?")
-            attached.append({"serial": serial, "state": state, "model": model})
-            if state == "device" and serial not in {d.get("serial") for d in registry["known"]}:
-                registry["known"].append(
-                    {
-                        "serial": serial,
-                        "model": model,
-                        "first_seen": datetime.now().isoformat(),
-                    }
-                )
-        if registry["known"]:
-            reg_path.parent.mkdir(parents=True, exist_ok=True)
-            reg_path.write_text(json.dumps(registry["known"], indent=1), encoding="utf-8")
-        return {"attached": attached, "known": registry["known"]}
+        attached = _parse_adb_devices(client.execute("devices", "-l") if client else "")
+        known = _register_devices(attached)
+        return {"attached": attached, "known": known}
 
     try:
         return JSONResponse(await loop.run_in_executor(None, enumerate_devices))
     except (PhoneError, OSError) as exc:
         return JSONResponse({"error": str(exc), "attached": [], "known": []}, status_code=503)
+
+
+def _parse_adb_devices(out: str) -> list[dict[str, str]]:
+    """Parse `adb devices -l` output into typed device rows (pure; tested)."""
+    attached: list[dict[str, str]] = []
+    for line in out.splitlines()[1:]:
+        if not line.strip():
+            continue
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        serial, state = parts[0], parts[1]
+        model = next((p.split(":", 1)[1] for p in parts if p.startswith("model:")), "?")
+        attached.append({"serial": serial, "state": state, "model": model})
+    return attached
+
+
+def _register_devices(attached: list[dict[str, str]]) -> list[dict[str, Any]]:
+    """Append unseen online devices to data/fleet.json (persisted registry)."""
+    reg_path = PROJECT_ROOT / "data" / "fleet.json"
+    known: list[dict[str, Any]] = []
+    try:
+        known = json.loads(reg_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        pass
+    seen = {d.get("serial") for d in known}
+    for d in attached:
+        if d["state"] == "device" and d["serial"] not in seen:
+            known.append(
+                {
+                    "serial": d["serial"],
+                    "model": d["model"],
+                    "first_seen": datetime.now().isoformat(),
+                }
+            )
+            seen.add(d["serial"])
+    reg_path.parent.mkdir(parents=True, exist_ok=True)
+    reg_path.write_text(json.dumps(known, indent=1), encoding="utf-8")
+    return known
 
 
 # ===== Root / Magisk API (root card) =====
