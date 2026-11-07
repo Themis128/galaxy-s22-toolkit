@@ -526,6 +526,33 @@
                     <div id="device-files-list" style="font-size: 0.8rem; max-height: 240px; overflow-y: auto;">Enter a device path and Browse.</div>
                 </div>
             </div>
+
+            <!-- Phone Backup Card -->
+            <div class="card">
+                <div class="card-header">💾 Phone Backup</div>
+                <div class="card-body">
+                    <div class="metric-row">
+                        <span class="metric-label">Status</span>
+                        <span class="metric-value" id="backup-status">—</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Last run</span>
+                        <span class="metric-value" id="backup-last">—</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Files in mirror</span>
+                        <span class="metric-value" id="backup-files">—</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Copied / unchanged</span>
+                        <span class="metric-value" id="backup-counts">—</span>
+                    </div>
+                    <div style="font-size: 0.75rem; opacity: 0.75; padding-top: 0.4rem;">
+                        Nightly incremental backup (03:15) — host command:
+                        <span style="font-family: monospace;">phone-backup incremental</span>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -931,6 +958,28 @@
         }
 
         document.getElementById('device-files-browse').addEventListener('click', () => browseDeviceFiles());
+
+        // ===== Phone Backup status =====
+        async function loadBackupStatus() {
+            try {
+                const res = await fetch('/api/backup/status');
+                const d = await res.json();
+                const el = document.getElementById('backup-status');
+                const ok = d.status === 'ok';
+                el.textContent = ok ? '✅ ' + d.mode : (d.status === 'never-run' ? 'never run' : d.status);
+                el.className = 'metric-value ' + (ok ? 'good' : 'warning');
+                document.getElementById('backup-last').textContent =
+                    d.finished ? new Date(d.finished).toLocaleString() : '—';
+                document.getElementById('backup-files').textContent =
+                    d.files_total !== undefined ? d.files_total : '—';
+                document.getElementById('backup-counts').textContent =
+                    d.copied !== undefined ? `${d.copied} / ${d.skipped_unchanged ?? '—'}` : '—';
+            } catch (e) {
+                console.error('backup status failed:', e);
+            }
+        }
+        loadBackupStatus();
+        setInterval(loadBackupStatus, 60000);
         
         // Writable mounts that drive health status (mirrors the diagnostics
         // rule: immutable factory partitions like /, /vendor, /apex/* are

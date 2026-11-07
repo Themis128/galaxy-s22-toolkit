@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "phone-backup"
+version = "1.0.0"
+description = "Incremental phone backup skill (implementation: tools/backup_phone.py)"
+requires-python = ">=3.10"
+
+[project.scripts]
+phone-backup = "phone_backup:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["phone_backup"]

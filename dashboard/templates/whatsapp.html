@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Viewer — Galaxy S22+ Toolkit</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; }
+        body { font-family: system-ui, sans-serif; background: #0f1b33; color: #eee; padding: 1.5rem; }
+        .card { max-width: 860px; margin: auto; background: #16264a; border-radius: 12px; padding: 1.25rem; }
+        h1 { font-size: 1.3rem; margin-bottom: 1rem; }
+        a.back { color: #7fb3ff; text-decoration: none; font-size: 0.85rem; }
+        .bar { display: flex; gap: 0.5rem; margin: 0.75rem 0; flex-wrap: wrap; }
+        select, input { padding: 0.5rem; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.08); color: inherit; }
+        select { flex: 2; min-width: 220px; } input { flex: 3; min-width: 200px; }
+        .btn { background: #1e3c72; color: #fff; border: none; padding: 0.5rem 0.9rem; border-radius: 6px; cursor: pointer; }
+        .meta { opacity: 0.7; font-size: 0.8rem; margin-bottom: 0.75rem; }
+        .msg { padding: 0.5rem 0.75rem; border-radius: 8px; background: rgba(255,255,255,0.06); margin-bottom: 0.5rem; }
+        .msg .chat { color: #7fb3ff; font-size: 0.75rem; }
+        .msg .ts { opacity: 0.55; font-size: 0.72rem; }
+        .msg .txt { margin-top: 0.2rem; white-space: pre-wrap; word-break: break-word; }
+        .empty { opacity: 0.7; padding: 1rem 0; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <a class="back" href="/">← Dashboard</a>
+    <h1>💬 WhatsApp Chat Viewer</h1>
+    <div class="bar">
+        <select id="wa-file"></select>
+        <input id="wa-q" placeholder="Search text…" />
+        <button class="btn" id="wa-load">🔍 Search</button>
+    </div>
+    <div class="bar">
+        <select id="wa-chat"><option value="">All chats</option></select>
+    </div>
+    <div class="meta" id="wa-meta">Loading…</div>
+    <div id="wa-messages"><div class="empty">No exports yet — run <b>phone-recover whatsapp --confirm-key</b> on a rooted phone, then reload.</div></div>
+</div>
+<script>
+    const $ = (id) => document.getElementById(id);
+    async function loadExports() {
+        const res = await fetch('/api/whatsapp/exports');
+        const d = await res.json();
+        $('wa-file').innerHTML = (d.exports || []).map(e => `<option value="${e.file}">${e.file} (${(e.size/1024).toFixed(0)} KB)</option>`).join('');
+        if (!(d.exports || []).length) {
+            $('wa-meta').textContent = d.note || 'No exports found.';
+            $('wa-load').disabled = true;
+        } else {
+            load();
+        }
+    }
+    async function load() {
+        const file = $('wa-file').value;
+        if (!file) return;
+        $('wa-meta').textContent = 'Loading…';
+        const res = await fetch('/api/whatsapp/chats?file=' + encodeURIComponent(file)
+            + '&q=' + encodeURIComponent($('wa-q').value)
+            + '&chat=' + encodeURIComponent($('wa-chat').value));
+        const d = await res.json();
+        if (!res.ok) { $('wa-meta').textContent = d.error || ('HTTP ' + res.status); return; }
+        $('wa-meta').textContent = `${d.matches} of ${d.total_in_file} messages match · ${d.chats.length} chats`;
+        const chatSel = $('wa-chat');
+        const current = chatSel.value;
+        chatSel.innerHTML = '<option value="">All chats</option>'
+            + d.chats.map(c => `<option${c === current ? ' selected' : ''}>${c}</option>`).join('');
+        $('wa-messages').innerHTML = (d.messages || []).map(m => `
+            <div class="msg">
+                <span class="chat">${m.chat || 'unknown'}</span> · <span class="ts">${new Date(m.timestamp).toLocaleString()}</span>
+                <div class="txt">${(m.text || '').replace(/[&<>]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch])) || '<i>(media/empty)</i>'}</div>
+            </div>`).join('') || '<div class="empty">No messages match.</div>';
+    }
+    $('wa-load').addEventListener('click', () => { $('wa-chat').value = ''; load(); });
+    $('wa-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') load(); });
+    $('wa-chat').addEventListener('change', load);
+    loadExports();
+</script>
+</body>
+</html>

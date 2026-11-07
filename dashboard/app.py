@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import re
@@ -191,10 +192,20 @@ def _ensure_client() -> Any:
     return client
 
 
-def _collect_once() -> dict[str, Any]:
-    """One blocking collection pass (runs in a worker thread)."""
+def _collect_once(serial: str | None = None) -> dict[str, Any]:
+    """One blocking collection pass (runs in a worker thread).
+
+    Fleet scaffold: an explicit ``serial`` collects from that device with a
+    transient client (the global collector client is untouched)."""
     global client
-    client = _ensure_client()
+    if serial:
+        client = _ensure_client()
+        if client.get_serial() != serial:
+            from phone import create_client as _cc
+
+            client = _cc(serial)
+    else:
+        client = _ensure_client()
 
     device = client.device.get_device_info()
     battery = client.battery.get_battery_info()
@@ -403,11 +414,18 @@ async def dashboard(request: Request) -> HTMLResponse:
 
 
 @app.get("/api/health")
-async def api_health() -> JSONResponse:
-    """Current snapshot (triggers a fresh collection)."""
+async def api_health(serial: str | None = None) -> JSONResponse:
+    """Current snapshot (triggers a fresh collection).
+
+    Fleet scaffold: `?serial=S` collects from that specific device instead of
+    the dashboard's default client (transient client — the global collector
+    keeps its own device)."""
     loop = asyncio.get_running_loop()
     try:
-        metrics = await loop.run_in_executor(None, _collect_once)
+        if serial:
+            metrics = await loop.run_in_executor(None, _collect_once, serial)
+        else:
+            metrics = await loop.run_in_executor(None, _collect_once)
     except (ConnectionError, OSError, PhoneError):
         # OSError covers FileNotFoundError when the adb binary itself is
         # missing (bare CI runners); PhoneError covers CommandFailedError
@@ -1069,6 +1087,134 @@ async def api_device_files_delete(request: DeviceDeleteRequest) -> JSONResponse:
     except PhoneError as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
     return JSONResponse({"deleted": request.path})
+
+
+@app.get("/api/backup/status")
+async def api_backup_status() -> JSONResponse:
+    """Last incremental phone-backup report (written by tools/backup_phone.py)."""
+    status_path = Path(
+        os.getenv("BACKUP_STATUS", str(PROJECT_ROOT / "data" / "backup-status.json"))
+    )
+    try:
+        return JSONResponse(json.loads(status_path.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        return JSONResponse({"status": "never-run"})
+
+
+# ===== WhatsApp chat viewer (Tier B exports) =====
+
+_WHATSAPP_EXPORTS_DIR = Path(
+    os.getenv("WHATSAPP_EXPORTS_DIR", str(PROJECT_ROOT / "data" / "recovered" / "whatsapp"))
+)
+_WHATSAPP_FILE_RE = re.compile(r"^chats-\d{8}-\d{6}\.json$")
+
+
+@app.get("/whatsapp", response_class=HTMLResponse)
+async def whatsapp_page(request: Request) -> HTMLResponse:
+    """WhatsApp decrypted-chat viewer page."""
+    return templates.TemplateResponse(request, "whatsapp.html")
+
+
+@app.get("/api/whatsapp/exports")
+async def api_whatsapp_exports() -> JSONResponse:
+    """List decrypted chat-export files (from phone-recover whatsapp)."""
+    if not _WHATSAPP_EXPORTS_DIR.is_dir():
+        return JSONResponse(
+            {"exports": [], "note": "no exports yet — run phone-recover whatsapp on a rooted phone"}
+        )
+    exports = [
+        {
+            "file": p.name,
+            "size": p.stat().st_size,
+            "modified": datetime.fromtimestamp(p.stat().st_mtime).isoformat(),
+        }
+        for p in sorted(_WHATSAPP_EXPORTS_DIR.glob("chats-*.json"))
+    ]
+    return JSONResponse({"exports": exports, "total": len(exports)})
+
+
+@app.get("/api/whatsapp/chats")
+async def api_whatsapp_chats(
+    file: str, q: str = "", chat: str = "", limit: int = 2000
+) -> JSONResponse:
+    """Filtered messages from one decrypted export (path-confined)."""
+    if not _WHATSAPP_FILE_RE.fullmatch(file):
+        return JSONResponse({"error": "Invalid export file name"}, status_code=400)
+    path = _WHATSAPP_EXPORTS_DIR / file
+    if not path.is_file():
+        return JSONResponse({"error": "Export not found"}, status_code=404)
+    loop = asyncio.get_running_loop()
+
+    def load_and_filter() -> dict[str, Any]:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        q_lower = q.lower()
+        chat_lower = chat.lower()
+        messages = [
+            m
+            for m in data
+            if (not chat_lower or chat_lower in str(m.get("chat", "")).lower())
+            and (not q_lower or q_lower in str(m.get("text", "")).lower())
+        ]
+        chats = sorted({str(m.get("chat", "unknown")) for m in messages})
+        return {
+            "file": file,
+            "total_in_file": len(data),
+            "matches": len(messages),
+            "chats": chats,
+            "messages": messages[: max(0, min(limit, 2000))],
+        }
+
+    try:
+        return JSONResponse(await loop.run_in_executor(None, load_and_filter))
+    except (OSError, ValueError) as exc:
+        return JSONResponse({"error": f"unreadable export: {exc}"}, status_code=500)
+
+
+# ===== Fleet scaffolding (multi-device) =====
+
+
+@app.get("/api/fleet")
+async def api_fleet() -> JSONResponse:
+    """Attached devices (any Galaxy/iOS visible to adb) + the known registry.
+
+    Scaffolding for fleet mode: the registry (data/fleet.json) records every
+    device ever seen; attached devices come live from `adb devices -l`."""
+    loop = asyncio.get_running_loop()
+
+    def enumerate_devices() -> dict[str, Any]:
+        registry: dict[str, Any] = {"known": []}
+        reg_path = PROJECT_ROOT / "data" / "fleet.json"
+        try:
+            registry["known"] = json.loads(reg_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            pass
+        out = client.execute("devices", "-l") if client else ""
+        attached = []
+        for line in out.splitlines()[1:]:
+            if not line.strip():
+                continue
+            parts = line.split()
+            serial = parts[0]
+            state = parts[1] if len(parts) > 1 else "unknown"
+            model = next((p.split(":")[1] for p in parts if p.startswith("model:")), "?")
+            attached.append({"serial": serial, "state": state, "model": model})
+            if state == "device" and serial not in {d.get("serial") for d in registry["known"]}:
+                registry["known"].append(
+                    {
+                        "serial": serial,
+                        "model": model,
+                        "first_seen": datetime.now().isoformat(),
+                    }
+                )
+        if registry["known"]:
+            reg_path.parent.mkdir(parents=True, exist_ok=True)
+            reg_path.write_text(json.dumps(registry["known"], indent=1), encoding="utf-8")
+        return {"attached": attached, "known": registry["known"]}
+
+    try:
+        return JSONResponse(await loop.run_in_executor(None, enumerate_devices))
+    except (PhoneError, OSError) as exc:
+        return JSONResponse({"error": str(exc), "attached": [], "known": []}, status_code=503)
 
 
 # ===== Root / Magisk API (root card) =====
