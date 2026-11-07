@@ -18,8 +18,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 ARTIFACTS = REPO / "data" / "artifacts"
-if __name__ == "__main__":
-    sys.path.insert(0, str(REPO))
+sys.path.insert(0, str(REPO))
 
 try:
     from phone.imobile import IMobileClient
