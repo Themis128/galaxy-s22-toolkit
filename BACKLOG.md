@@ -7,8 +7,8 @@ Reflects the state after v0.5.0 published (2026-11-07).
 ### 1. Phone security patch install
 Patch 2026-08-05 (94 days, OUTDATED). The update-check broadcast was fired over ADB; the install itself requires the device **unlocked** (Settings → Software update → Download and install). The alert self-clears once installed.
 
-### 2. Legacy OneDrive tree retirement (one command)
-The old tree at `CrossDevice\Galaxy S22+ (2)` holds 8.9 GB of phone-mirror data and divergent git history. `python tools/retire_legacy_tree.py` (dry-run) verifies the canonical repo is clean+pushed, inventories everything, moves `data/` into the canonical `data/legacy-mirror/` (same-volume rename) and preserves the stray personal files. Run `--execute` **from a directory outside the legacy tree** (keeps `.zcode`/`.mimosa`/`.glm-hammer` for any attached session); add `--all` from a fresh terminal later.
+### 2. Legacy OneDrive tree retirement — 95% DONE (2026-11-07)
+Executed: 8.3 GB of phone-mirror data moved to `data/legacy-mirror/`, personal files archived to `data/legacy-archive/`, 57 cloud-only WhatsApp-backup placeholders documented in `data/legacy-archive/SKIPPED-CLOUD-FILES.txt` (their cloud copies survive in OneDrive), the tree itself deleted down to the harness dirs `.zcode/.mimosa/.glm-hammer` (2.4 MB). **Remaining**: after this session ends, run from a fresh terminal `python tools\retire_legacy_tree.py --execute --all` to remove the last harness state (the tool handles read-only re-flagging and cloud placeholders; resumable).
 
 ### 3. Multi-device fleet mode (deferred by design)
 The toolkit adapts to one attached Galaxy at a time; per-device dashboards stay out of scope until a second phone exists on the tailnet.
