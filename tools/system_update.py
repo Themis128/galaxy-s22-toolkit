@@ -43,12 +43,24 @@ def parse_bounds(bounds: str) -> tuple[int, int]:
     return (x1 + x2) // 2, (y1 + y2) // 2
 
 
+def _safe_fromstring(xml: str) -> ET.Element[str]:
+    """Parse a uiautomator dump, refusing entity-bearing XML.
+
+    UI dumps are plain <hierarchy> documents; a DOCTYPE or entity
+    declaration would only appear in hostile input (billion-laughs /
+    entity expansion), so refuse it instead of parsing."""
+    head = xml[:4096].upper()
+    if "<!DOCTYPE" in head or "<!ENTITY" in head:
+        raise ET.ParseError("entity-bearing XML refused")
+    return ET.fromstring(xml)
+
+
 def find_tappable(xml: str, needle: str) -> tuple[int, int] | None:
     """Find a node whose text or content-desc contains ``needle``
     (case-insensitive) and return its tap center, preferring clickable
     nodes. None when not found."""
     try:
-        root = ET.fromstring(xml)
+        root = _safe_fromstring(xml)
     except ET.ParseError:
         return None
     fallback: tuple[int, int] | None = None
@@ -70,7 +82,7 @@ def find_tappable(xml: str, needle: str) -> tuple[int, int] | None:
 def summarize_ui(xml: str, limit: int = 40) -> list[str]:
     """Readable one-line summary of the interesting text nodes."""
     try:
-        root = ET.fromstring(xml)
+        root = _safe_fromstring(xml)
     except ET.ParseError:
         return ["<unparseable UI dump>"]
     lines = []

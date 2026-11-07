@@ -29,7 +29,9 @@ class StorageModule:
 
     def get_storage_usage(self) -> StorageUsage:
         """Get overall storage usage (total, used, free) for the main data partition.
-        Returns an object with total, used, free attributes for diagnostics compatibility."""
+
+        Returns a StorageUsage TypedDict — access values by key
+        (``usage["total"]``), not by attribute."""
         data_storage = self.get_data_storage()
         if data_storage:
             return StorageUsage(

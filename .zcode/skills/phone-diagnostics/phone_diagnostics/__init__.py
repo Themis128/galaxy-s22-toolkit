@@ -109,10 +109,12 @@ def run_diagnostics(args: argparse.Namespace) -> int:
             print("💾 Checking storage...")
         usage = storage.get_storage_usage()
         report["storage"] = {
-            "total": usage.total,
-            "used": usage.used,
-            "free": usage.free,
-            "percent_used": round(usage.used / usage.total * 100, 1) if usage.total > 0 else 0,
+            "total": usage["total"],
+            "used": usage["used"],
+            "free": usage["free"],
+            "percent_used": round(usage["used"] / usage["total"] * 100, 1)
+            if usage["total"] > 0
+            else 0,
         }
     except Exception as e:
         errors.append(f"Storage: {e}")
@@ -331,11 +333,11 @@ def cmd_storage(args: argparse.Namespace) -> int:
             print(
                 json.dumps(
                     {
-                        "total": usage.total,
-                        "used": usage.used,
-                        "free": usage.free,
-                        "percent_used": round(usage.used / usage.total * 100, 1)
-                        if usage.total > 0
+                        "total": usage["total"],
+                        "used": usage["used"],
+                        "free": usage["free"],
+                        "percent_used": round(usage["used"] / usage["total"] * 100, 1)
+                        if usage["total"] > 0
                         else 0,
                     },
                     indent=2,

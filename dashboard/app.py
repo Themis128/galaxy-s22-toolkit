@@ -9,11 +9,12 @@ import os
 import re
 import subprocess
 import sys
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from phone import create_client
@@ -526,22 +527,18 @@ async def api_trends_rollup(hours_back: int = 2, days_back: int = 2) -> JSONResp
 @app.get("/alerts", response_class=HTMLResponse)
 async def alerts_page(request: Request) -> HTMLResponse:
     """Human-readable alert board (severity-sorted, auto-refresh)."""
-    import sqlite3
-
-    insights_mod = _load_tool("insights")
     alerts_mod = _load_tool("alerts")
-    db = get_metrics_db()
-    conn = sqlite3.connect(f"file:{db.db_path}?mode=ro", uri=True)
-    try:
-        insights = insights_mod.analyze(conn)["insights"]
-    finally:
-        conn.close()
+    loop = asyncio.get_running_loop()
+    # Shallow-copies the list so the patch-age append never mutates the cache.
+    insights = list((await _insights_report())["insights"])
     # Patch age comes straight from the connected phone here (the
     # container has no diagnostics reports to read).
     try:
         from datetime import date
 
-        patch = _ensure_client().device.get_security_patch()
+        patch = await loop.run_in_executor(
+            None, lambda: _ensure_client().device.get_security_patch()
+        )
         patch_days = (date.today() - datetime.strptime(patch[:10], "%Y-%m-%d").date()).days
         insights.append(
             {
@@ -568,25 +565,66 @@ def _load_tool(name: str) -> Any:
     return mod
 
 
-@app.get("/api/alerts")
-async def api_alerts() -> JSONResponse:
-    """Active alerts from the current metrics history (stateless)."""
+_insights_cache: tuple[float, dict[str, Any]] | None = None
+INSIGHTS_TTL_S = 60
+
+
+def _load_insights_module() -> Any:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "insights", PROJECT_ROOT / "tools" / "insights.py"
+    )
+    if spec is None or spec.loader is None:
+        raise ImportError("Could not load insights module")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _analyze_insights_blocking() -> dict[str, Any]:
+    """Full SQL scan of the raw snapshots — heavy; runs in the executor."""
     import sqlite3
 
-    insights_mod = _load_tool("insights")
-    alerts_mod = _load_tool("alerts")
+    mod = _load_insights_module()
     db = get_metrics_db()
     conn = sqlite3.connect(f"file:{db.db_path}?mode=ro", uri=True)
     try:
-        insights = insights_mod.analyze(conn)["insights"]
+        return cast(dict[str, Any], mod.analyze(conn))
     finally:
         conn.close()
+
+
+async def _insights_report() -> dict[str, Any]:
+    """Insights with a 60 s TTL cache; the analysis runs in the executor so
+    the event loop never blocks (a 7-day scan takes tens of seconds and
+    previously stalled every other request)."""
+    global _insights_cache
+    loop = asyncio.get_running_loop()
+    now = time.monotonic()
+    if _insights_cache is not None and now - _insights_cache[0] < INSIGHTS_TTL_S:
+        return _insights_cache[1]
+    report = await loop.run_in_executor(None, _analyze_insights_blocking)
+    _insights_cache = (now, report)
+    return report
+
+
+@app.get("/api/alerts")
+async def api_alerts() -> JSONResponse:
+    """Active alerts from the current metrics history (stateless)."""
+    insights_mod = _load_tool("insights")
+    alerts_mod = _load_tool("alerts")
+    loop = asyncio.get_running_loop()
+    # Shallow-copies the list so the patch-age append never mutates the cache.
+    insights = list((await _insights_report())["insights"])
     # Patch age comes straight from the connected phone here (the
     # container has no diagnostics reports to read).
     try:
         from datetime import date
 
-        patch = _ensure_client().device.get_security_patch()
+        patch = await loop.run_in_executor(
+            None, lambda: _ensure_client().device.get_security_patch()
+        )
         patch_days = (date.today() - datetime.strptime(patch[:10], "%Y-%m-%d").date()).days
         insights.append(
             {
@@ -611,24 +649,8 @@ async def api_alerts() -> JSONResponse:
 
 @app.get("/api/insights")
 async def api_insights() -> JSONResponse:
-    """Degradation insights computed from the raw history."""
-    import importlib.util
-    import sqlite3
-
-    spec = importlib.util.spec_from_file_location(
-        "insights", PROJECT_ROOT / "tools" / "insights.py"
-    )
-    if spec is None or spec.loader is None:
-        raise ImportError("Could not load insights module")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    db = get_metrics_db()
-    conn = sqlite3.connect(f"file:{db.db_path}?mode=ro", uri=True)
-    try:
-        report = mod.analyze(conn)
-    finally:
-        conn.close()
-    return JSONResponse(report)
+    """Degradation insights computed from the raw history (60 s cache)."""
+    return JSONResponse(await _insights_report())
 
 
 @app.websocket("/ws/live")
