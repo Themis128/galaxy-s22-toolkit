@@ -3,6 +3,25 @@
 All notable changes to the Galaxy toolkit. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); dates are ISO 8601.
 
+## [0.7.0] - 2026-11-07
+
+### Added — Backup, Viewer, Fleet (the next phase, all three)
+- **Incremental phone backup**: `phone-backup incremental|full|status` —
+  manifest-driven pulls of 9 user-content roots (incl. WhatsApp media) into
+  `data/phone-mirror/`. Baseline live-verified: 2088 files / 43.3 GB / 0
+  errors in 23 min; incremental re-run: **7.8 s, 0 copied, 2088 unchanged**.
+  Nightly task `\Phone Toolkit\Phone Backup` (03:15) keeps it current.
+- **Dashboard Backup card** + `GET /api/backup/status` (data mount broadened
+  to `./data:/app/data` — pulls and status are host-visible).
+- **WhatsApp chat viewer**: `/whatsapp` page + `GET /api/whatsapp/exports|chats`
+  — path-confined decrypted-export browsing with text search and per-chat
+  filter (populated by `phone-recover whatsapp` on a rooted phone).
+- **Fleet scaffolding**: `GET /api/fleet` (attached devices from
+  `adb devices -l` + auto-registering `data/fleet.json` registry) and
+  `GET /api/health?serial=S` per-device snapshots via transient clients.
+- **doctor mobile probes** use the winget-aware `binfind` finder; 63
+  OneDrive re-flagged files cleared from the canonical tree.
+
 ## [0.6.0] - 2026-11-07
 
 ### Added — Full Mobile Suite (Wondershare-class, all open-source pillars)

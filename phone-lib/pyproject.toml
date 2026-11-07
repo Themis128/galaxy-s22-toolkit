@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "galaxy-s22-toolkit"
-version = "0.6.0"
+version = "0.7.0"
 description = "ADB wrapper library for Samsung Galaxy phone diagnostics and management (S/Note/A, Android 10+)"
 readme = "README.md"
 requires-python = ">=3.10"
