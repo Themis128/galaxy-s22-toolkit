@@ -128,6 +128,23 @@ class TestRadioToggleTransportGuard:
         assert "USB transport" in result.message
         module.client.execute_async.assert_not_called()
 
+    async def test_unknown_serial_refuses(self):
+        """serial=None is NOT proven USB — the guard must refuse it too.
+
+        Regression: a None serial slipped past the colon check and radio
+        toggles ran serial-less against an offline transport, leaving the
+        phone's Wi-Fi off (exit 1 on the undeliverable re-enable).
+        """
+        from unittest.mock import MagicMock
+
+        client = MagicMock()
+        client.serial = None
+        module = RepairModule(client)
+        result = await module._repair_reset_wifi()
+        assert result.success is False
+        assert "identity is unknown" in result.message
+        module.client.execute_async.assert_not_called()
+
     async def test_radio_toggles_still_run_over_usb(self, repair):
         """USB serial (no colon) bypasses the guard — commands are issued."""
         result = await repair._repair_reset_wifi()

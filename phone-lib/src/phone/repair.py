@@ -861,30 +861,36 @@ class RepairModule:
 
     @staticmethod
     def _is_wireless_transport(client: Any) -> bool:
-        """True when the client dials the phone over a network transport.
+        """True when the transport is NOT a proven USB connection.
 
-        Radio-toggle repairs are unsafe here: `svc wifi disable` (or airplane
-        mode on) kills the very connection the re-enable step needs, so the
-        phone can be left with its radio off and ADB unreachable. Network
-        serials look like `192.168.1.77:5555`; USB serials do not contain a
-        colon.
+        Network serials look like `192.168.1.77:5555` (contain a colon); USB
+        serials do not. An empty/None serial is UNKNOWN — treated as unsafe
+        for radio toggles, because an unidentified transport may be exactly
+        the one the toggle would kill (offline devices also fail serial-less
+        calls with exit 1).
         """
         serial = str(getattr(client, "serial", "") or "")
-        return ":" in serial
+        return (not serial) or (":" in serial)
 
     def _radio_toggle_guard(self, action: Any) -> RepairResult | None:
-        """Honest refusal for radio toggles over wireless ADB."""
+        """Honest refusal for radio toggles unless the transport is proven USB."""
         if not self._is_wireless_transport(self.client):
             return None
+        serial = str(getattr(self.client, "serial", "") or "")
+        reason = (
+            "the transport is wireless"
+            if ":" in serial
+            else "the transport identity is unknown (no serial resolved)"
+        )
         return RepairResult(
             action=action,
             success=False,
             message=(
-                "Skipped: radio toggles need the USB transport, and this session "
-                "is wireless. Over wireless ADB the disable step kills the "
-                "connection the re-enable needs, leaving the radio off and ADB "
-                "unreachable. The dashboard container cannot use USB at all — "
-                f"run this from the host CLI instead: phone-repair run {action.name}"
+                "Skipped: radio toggles need a proven USB transport, and "
+                f"{reason}. Over any non-USB path the disable step can kill "
+                "the connection the re-enable needs, leaving the radio off "
+                "and ADB unreachable. The dashboard container cannot use USB "
+                f"at all — run this from the host CLI instead: phone-repair run {action.name}"
             ),
         )
 
