@@ -289,8 +289,16 @@ def main() -> int:
     arch.mkdir(parents=True, exist_ok=True)
     for name, src in p["preserves"].items():
         if name in ("micro1-report.md", "micro1-interview-prep.html", "dashboard-verification.png"):
-            shutil.copy2(src, arch / name)
-            print(f"Preserved   : {name} -> {arch / name}")
+            dst_file = arch / name
+            if dst_file.exists():
+                print(f"Preserved   : {name} (already archived)")
+                continue
+            try:
+                shutil.copy2(src, dst_file)
+                dst_file.chmod(0o666)
+                print(f"Preserved   : {name} -> {dst_file}")
+            except OSError as exc:
+                print(f"Preserve FAILED for {name}: {exc}")
 
     # 3) Delete the rest
     removed = _rmtree_except(legacy, keep)
