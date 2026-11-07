@@ -27,7 +27,7 @@ if __name__ == "__main__":
 try:
     from phone import create_client
 except ImportError:  # pragma: no cover
-    create_client = None
+    create_client = None  # type: ignore[assignment,misc]
 
 
 def _patch_age_days(serial: str | None) -> int | None:
@@ -51,10 +51,8 @@ def _patch_age_days(serial: str | None) -> int | None:
 def _crash_counts(serial: str | None) -> tuple[int, int]:
     try:
         client = create_client(serial)
-        logcat = client.logcat
-        crashes = len(logcat.find_crashes())
-        anrs = len(logcat.find_anrs())
-        return crashes, anrs
+        logcat = client.logcat_module
+        return len(logcat.find_crashes()), len(logcat.find_anrs())
     except Exception:  # noqa: BLE001
         return 0, 0
 
