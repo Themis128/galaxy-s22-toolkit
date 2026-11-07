@@ -20,6 +20,7 @@ from __future__ import annotations
 
 # ruff: noqa: T201  # CLI output requires print statements
 import argparse
+import re
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -109,12 +110,24 @@ def dump_ui(client: AdbClient) -> str:
 
 
 def wake_if_needed(client: AdbClient) -> bool:
-    """Wake the screen; return False when a lockscreen still blocks input."""
-    focus = client.execute("shell", "dumpsys", "window", check=False)
-    if "Keyguard" in focus or "NotificationShade" in focus:
+    """Wake the screen; return False only when the lockscreen truly blocks input.
+
+    The signal is KeyguardServiceDelegate's `showing=` flag from
+    `dumpsys window policy` — the word "Keyguard" alone appears in service
+    names even on an unlocked phone, which false-positived constantly.
+    Also collapses the notification shade, whose focus blocks taps."""
+    policy = client.execute("shell", "dumpsys", "window", "policy", check=False)
+    showing = re.search(r"KeyguardServiceDelegate\s*\n?\s*showing=(true|false)", policy)
+    locked = bool(showing and showing.group(1) == "true")
+    if locked:
         client.execute("shell", "input", "keyevent", "KEYCODE_WAKEUP", check=False)
-        focus = client.execute("shell", "dumpsys", "window", check=False)
-    return "Keyguard" not in focus
+        client.execute("shell", "input", "keyevent", "82", check=False)
+        policy = client.execute("shell", "dumpsys", "window", "policy", check=False)
+        showing = re.search(r"KeyguardServiceDelegate\s*\n?\s*showing=(true|false)", policy)
+        locked = bool(showing and showing.group(1) == "true")
+    if not locked:
+        client.execute("shell", "cmd", "statusbar", "collapse", check=False)
+    return not locked
 
 
 def open_update_screen(client: AdbClient) -> None:
