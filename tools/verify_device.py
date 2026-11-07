@@ -27,7 +27,7 @@ if __name__ == "__main__":
 try:
     from phone import create_client
 except ImportError:  # pragma: no cover
-    create_client = None  # type: ignore[assignment,misc]
+    create_client = None  # type: ignore[assignment]
 
 
 def _patch_age_days(serial: str | None) -> int | None:

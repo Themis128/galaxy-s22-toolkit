@@ -29,7 +29,7 @@ if __name__ == "__main__":
 try:
     from phone import create_client
 except ImportError:  # pragma: no cover - running outside the repo
-    create_client = None  # type: ignore[assignment,misc]
+    create_client = None  # type: ignore[assignment]
 
 
 def find_scrcpy() -> str | None:
