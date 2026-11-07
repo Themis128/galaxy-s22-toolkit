@@ -1183,7 +1183,7 @@
                     throw new Error(result.error || `HTTP ${response.status}`);
                 }
                 
-                let html = `<div class="metric-row"><span class="metric-label"><strong>Completed: ${result.successful}/${result.total} successful</strong></span></div>`;
+                let html = `<div class="metric-row"><span class="metric-label"><strong>Completed: ${result.successful ?? 0} ✅ · ${result.skipped ?? 0} ⚠ skipped · ${result.failed ?? 0} ❌ failed</strong></span></div>`;
                 result.results.forEach(r => {
                     html += `<div class="metric-row" style="font-size: 0.85rem; padding: 0.25rem;">
                         <span class="metric-label">${r.action_name}</span>

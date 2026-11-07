@@ -896,11 +896,15 @@ async def api_repair_execute_multiple(request: RepairMultipleRequest) -> JSONRes
         )
     for r in results:
         _notify_repair_toast(r)
+    succeeded = sum(1 for r in results if r.success)
+    skipped = sum(1 for r in results if not r.success and (r.message or "").startswith("Skipped:"))
     return JSONResponse(
         {
             "results": [_repair_result_json(r) for r in results],
             "total": len(results),
-            "successful": sum(1 for r in results if r.success),
+            "successful": succeeded,
+            "skipped": skipped,
+            "failed": len(results) - succeeded - skipped,
         }
     )
 

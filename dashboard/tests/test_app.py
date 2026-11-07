@@ -166,6 +166,8 @@ class TestBulkRepairRobustness:
         assert r.status_code == 200
         body = r.json()
         assert body["successful"] == 1
+        assert body["skipped"] == 0
+        assert body["failed"] == 0
         assert body["results"][0]["action_name"] == "noop"
 
     def test_diagnostics_run_returns_json_on_runner_crash(
