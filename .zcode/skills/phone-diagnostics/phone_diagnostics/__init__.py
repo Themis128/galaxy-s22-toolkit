@@ -17,10 +17,30 @@ from phone.thermal import ThermalModule
 
 
 def get_client(serial: str | None = None) -> AdbClient:
-    """Get ADB client, optionally with specific serial."""
-    if serial:
-        return AdbClient(serial=serial)
-    return AdbClient()
+    """Get ADB client with the toolkit's standard serial resolution.
+
+    Uses create_client so `preferred_serial` (USB) wins when both transports
+    are attached and wireless auto-connect engages when none is — a bare
+    AdbClient() issues serial-less adb calls that die with "more than one
+    device" in exactly that case.
+    """
+    from pathlib import Path
+
+    from phone import create_client
+
+    wireless = None
+    try:
+        import yaml
+
+        root = Path(__file__).resolve().parents[4]
+        with open(root / "diagnostics" / "config.yaml", encoding="utf-8") as f:
+            device_cfg = (yaml.safe_load(f) or {}).get("device", {})
+        wireless = device_cfg.get("wireless_adb") or None
+        if wireless:
+            wireless = {**wireless, "preferred_serial": device_cfg.get("serial")}
+    except Exception:  # noqa: BLE001 - config-less fallback is fine
+        wireless = None
+    return create_client(serial, wireless=wireless)
 
 
 def run_diagnostics(args: argparse.Namespace) -> int:
@@ -106,8 +126,14 @@ def run_diagnostics(args: argparse.Namespace) -> int:
         report["logcat"] = {
             "crashes_found": len(crashes),
             "anrs_found": len(anrs),
-            "crashes": [{"time": c.timestamp.isoformat(), "package": c.package, "message": c.message[:200]} for c in crashes[:5]],
-            "anrs": [{"time": a.timestamp.isoformat(), "package": a.package, "message": a.message[:200]} for a in anrs[:5]],
+            "crashes": [
+                {"time": c.timestamp.isoformat(), "package": c.package, "message": c.message[:200]}
+                for c in crashes[:5]
+            ],
+            "anrs": [
+                {"time": a.timestamp.isoformat(), "package": a.package, "message": a.message[:200]}
+                for a in anrs[:5]
+            ],
         }
     except Exception as e:
         errors.append(f"Logcat: {e}")
@@ -127,7 +153,7 @@ def run_diagnostics(args: argparse.Namespace) -> int:
     except Exception as e:
         errors.append(f"Network: {e}")
 
-# Thermal
+        # Thermal
         try:
             if not args.json and not args.quiet:
                 print("🌡️ Checking thermal...")
@@ -142,7 +168,9 @@ def run_diagnostics(args: argparse.Namespace) -> int:
 
     # Output
     if args.json:
-        print(json.dumps({"success": len(errors) == 0, "report": report, "errors": errors}, indent=2))
+        print(
+            json.dumps({"success": len(errors) == 0, "report": report, "errors": errors}, indent=2)
+        )
     else:
         if not args.quiet:
             print("\n" + "=" * 60)
@@ -152,21 +180,31 @@ def run_diagnostics(args: argparse.Namespace) -> int:
             # Device
             d = report["device"]
             print(f"\n📱 Device: {d.get('manufacturer', 'Unknown')} {d.get('model', 'Unknown')}")
-            print(f"   Android: {d.get('android_version', 'Unknown')} | Security Patch: {d.get('security_patch', 'Unknown')}")
+            print(
+                f"   Android: {d.get('android_version', 'Unknown')} | Security Patch: {d.get('security_patch', 'Unknown')}"
+            )
             print(f"   Serial: {d.get('serial', 'Unknown')} | CPU: {d.get('cpu_abi', 'Unknown')}")
 
             # Battery
             b = report["battery"]
-            print(f"\n🔋 Battery: {b.get('level', '?')}% | {b.get('status', 'Unknown')} | Health: {b.get('health', 'Unknown')}")
-            print(f"   Temp: {b.get('temperature', '?')}°C | Voltage: {b.get('voltage', '?')}mV | Cycles: {b.get('cycle_count', '?')}")
+            print(
+                f"\n🔋 Battery: {b.get('level', '?')}% | {b.get('status', 'Unknown')} | Health: {b.get('health', 'Unknown')}"
+            )
+            print(
+                f"   Temp: {b.get('temperature', '?')}°C | Voltage: {b.get('voltage', '?')}mV | Cycles: {b.get('cycle_count', '?')}"
+            )
 
             # Storage
             s = report["storage"]
-            print(f"\n💾 Storage: {s.get('percent_used', '?')}% used ({s.get('used', 0)}/{s.get('total', 0)} bytes)")
+            print(
+                f"\n💾 Storage: {s.get('percent_used', '?')}% used ({s.get('used', 0)}/{s.get('total', 0)} bytes)"
+            )
 
             # Logcat
             logcat_report = report["logcat"]
-            print(f"\n📋 Logs (last {args.log_minutes} min): {logcat_report.get('crashes_found', 0)} crashes, {logcat_report.get('anrs_found', 0)} ANRs")
+            print(
+                f"\n📋 Logs (last {args.log_minutes} min): {logcat_report.get('crashes_found', 0)} crashes, {logcat_report.get('anrs_found', 0)} ANRs"
+            )
             if logcat_report.get("crashes_found", 0) > 0:
                 for c in logcat_report["crashes"]:
                     print(f"   ⚠️  {c['package']}: {c['message']}")
@@ -177,16 +215,22 @@ def run_diagnostics(args: argparse.Namespace) -> int:
             # Network
             n = report["network"]
             conn = n.get("connectivity", {})
-            print(f"\n🌐 Network: Internet={'✅' if conn.get('internet') else '❌'} | DNS={'✅' if conn.get('dns') else '❌'}")
+            print(
+                f"\n🌐 Network: Internet={'✅' if conn.get('internet') else '❌'} | DNS={'✅' if conn.get('dns') else '❌'}"
+            )
             if n.get("wifi"):
                 w = n["wifi"]
-                print(f"   WiFi: {w.get('ssid', 'Unknown')} | Signal: {w.get('rssi', '?')} dBm | Link Speed: {w.get('link_speed', '?')} Mbps")
+                print(
+                    f"   WiFi: {w.get('ssid', 'Unknown')} | Signal: {w.get('rssi', '?')} dBm | Link Speed: {w.get('link_speed', '?')} Mbps"
+                )
 
             # Thermal
             t = report["thermal"]
             print(f"\n🌡️ Thermal: Throttling={'⚠️ YES' if t.get('throttling') else '✅ No'}")
             for zone in t.get("zones", [])[:3]:
-                print(f"   {zone.get('name', 'Unknown')}: {zone.get('temp', '?')}°C ({zone.get('type', 'Unknown')})")
+                print(
+                    f"   {zone.get('name', 'Unknown')}: {zone.get('temp', '?')}°C ({zone.get('type', 'Unknown')})"
+                )
 
             if errors:
                 print(f"\n⚠️  Errors: {len(errors)}")
@@ -205,16 +249,21 @@ def cmd_device(args: argparse.Namespace) -> int:
     try:
         info = device.get_device_info()
         if args.json:
-            print(json.dumps({
-                "model": info.model,
-                "manufacturer": info.manufacturer,
-                "android_version": info.android_version,
-                "security_patch": info.security_patch,
-                "build_number": info.build_number,
-                "serial": info.serial,
-                "cpu_abi": info.cpu_abi,
-                "total_memory": info.total_memory,
-            }, indent=2))
+            print(
+                json.dumps(
+                    {
+                        "model": info.model,
+                        "manufacturer": info.manufacturer,
+                        "android_version": info.android_version,
+                        "security_patch": info.security_patch,
+                        "build_number": info.build_number,
+                        "serial": info.serial,
+                        "cpu_abi": info.cpu_abi,
+                        "total_memory": info.total_memory,
+                    },
+                    indent=2,
+                )
+            )
         else:
             print(f"Model: {info.manufacturer} {info.model}")
             print(f"Android: {info.android_version}")
@@ -239,16 +288,21 @@ def cmd_battery(args: argparse.Namespace) -> int:
     try:
         health = battery.get_battery_health()
         if args.json:
-            print(json.dumps({
-                "level": health.level,
-                "status": health.status,
-                "health": health.health,
-                "technology": health.technology,
-                "temperature": health.temperature,
-                "voltage": health.voltage,
-                "capacity": health.capacity,
-                "cycle_count": health.cycle_count,
-            }, indent=2))
+            print(
+                json.dumps(
+                    {
+                        "level": health.level,
+                        "status": health.status,
+                        "health": health.health,
+                        "technology": health.technology,
+                        "temperature": health.temperature,
+                        "voltage": health.voltage,
+                        "capacity": health.capacity,
+                        "cycle_count": health.cycle_count,
+                    },
+                    indent=2,
+                )
+            )
         else:
             print(f"Level: {health.level}%")
             print(f"Status: {health.status}")
@@ -274,12 +328,19 @@ def cmd_storage(args: argparse.Namespace) -> int:
     try:
         usage = storage.get_storage_usage()
         if args.json:
-            print(json.dumps({
-                "total": usage.total,
-                "used": usage.used,
-                "free": usage.free,
-                "percent_used": round(usage.used / usage.total * 100, 1) if usage.total > 0 else 0,
-            }, indent=2))
+            print(
+                json.dumps(
+                    {
+                        "total": usage.total,
+                        "used": usage.used,
+                        "free": usage.free,
+                        "percent_used": round(usage.used / usage.total * 100, 1)
+                        if usage.total > 0
+                        else 0,
+                    },
+                    indent=2,
+                )
+            )
         else:
             print(f"Total: {usage.total} bytes")
             print(f"Used: {usage.used} bytes ({round(usage.used / usage.total * 100, 1)}%)")
@@ -301,12 +362,31 @@ def cmd_logs(args: argparse.Namespace) -> int:
         crashes = logcat.find_crashes(since_minutes=args.minutes)
         anrs = logcat.find_anrs(since_minutes=args.minutes)
         if args.json:
-            print(json.dumps({
-                "crashes_found": len(crashes),
-                "anrs_found": len(anrs),
-                "crashes": [{"time": c.timestamp.isoformat(), "package": c.package, "message": c.message} for c in crashes],
-                "anrs": [{"time": a.timestamp.isoformat(), "package": a.package, "message": a.message} for a in anrs],
-            }, indent=2))
+            print(
+                json.dumps(
+                    {
+                        "crashes_found": len(crashes),
+                        "anrs_found": len(anrs),
+                        "crashes": [
+                            {
+                                "time": c.timestamp.isoformat(),
+                                "package": c.package,
+                                "message": c.message,
+                            }
+                            for c in crashes
+                        ],
+                        "anrs": [
+                            {
+                                "time": a.timestamp.isoformat(),
+                                "package": a.package,
+                                "message": a.message,
+                            }
+                            for a in anrs
+                        ],
+                    },
+                    indent=2,
+                )
+            )
         else:
             print(f"Crashes (last {args.minutes} min): {len(crashes)}")
             for c in crashes:
@@ -357,7 +437,17 @@ def cmd_thermal(args: argparse.Namespace) -> int:
         zones = thermal.get_thermal_zones()
         throttling = thermal.get_throttling_status()
         if args.json:
-            print(json.dumps({"zones": [{"name": z.name, "temp_c": z.temp_c, "type": z.type} for z in zones], "throttling": throttling}, indent=2))
+            print(
+                json.dumps(
+                    {
+                        "zones": [
+                            {"name": z.name, "temp_c": z.temp_c, "type": z.type} for z in zones
+                        ],
+                        "throttling": throttling,
+                    },
+                    indent=2,
+                )
+            )
         else:
             print(f"Throttling: {'⚠️ YES' if throttling else '✅ No'}")
             for zone in zones:
@@ -378,13 +468,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--serial", "-s", help="Device serial number")
     parser.add_argument("--json", "-j", action="store_true", help="Output JSON")
-    parser.add_argument("--quiet", "-q", action="store_true", help="Suppress progress output (with --json)")
+    parser.add_argument(
+        "--quiet", "-q", action="store_true", help="Suppress progress output (with --json)"
+    )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # run - full diagnostic suite
     sp = subparsers.add_parser("run", help="Run full diagnostic suite")
-    sp.add_argument("--log-minutes", type=int, default=60, help="Minutes of logs to check for crashes/ANRs")
+    sp.add_argument(
+        "--log-minutes", type=int, default=60, help="Minutes of logs to check for crashes/ANRs"
+    )
     sp.set_defaults(func=run_diagnostics)
 
     # device

@@ -1217,10 +1217,20 @@
                     container.style.display = 'block';
                     let html = '<div class="metric-row"><span class="metric-label"><strong>Repair History</strong></span></div>';
                     data.history.slice(-10).reverse().forEach(r => {
+                        // Guard refusals ("Skipped: ...") are honest no-ops, not
+                        // failures — render them as warnings with the reason.
+                        const skipped = (r.message || '').startsWith('Skipped:');
+                        const icon = r.success ? '✅' : (skipped ? '⚠️' : '❌');
+                        const cls = r.success ? 'good' : (skipped ? 'warning' : 'critical');
                         html += `<div class="metric-row" style="font-size: 0.8rem; padding: 0.25rem; border-top: 1px solid #f0f0f0;">
                             <span class="metric-label">${r.action_name}</span>
-                            <span class="metric-value ${r.success ? 'good' : 'critical'}">${r.success ? '✅' : '❌'} ${new Date(r.timestamp).toLocaleTimeString()}</span>
+                            <span class="metric-value ${cls}">${icon} ${new Date(r.timestamp).toLocaleTimeString()}</span>
                         </div>`;
+                        if (!r.success) {
+                            html += `<div class="metric-row" style="font-size: 0.72rem; padding: 0 0.25rem 0.3rem; opacity: 0.85;">
+                                <span class="metric-value ${cls}">${r.message || ''}</span>
+                            </div>`;
+                        }
                     });
                     container.innerHTML = html;
                 } else {

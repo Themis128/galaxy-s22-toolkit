@@ -23,6 +23,10 @@ services:
       # need to approve a new key for the container
       - ${USERPROFILE}/.android/adbkey:/root/.android/adbkey:ro
       - ${USERPROFILE}/.android/adbkey.pub:/root/.android/adbkey.pub:ro
+      # Shared repair history + diagnostics log: host CLI and the dashboard
+      # append to the SAME JSONL so the history view shows both. Safe bind:
+      # the repo lives in C:\dev (outside OneDrive's read-only re-flagging).
+      - ./logs:/app/logs
       # Named volume (not a host bind): survives rebuilds and `compose down`,
       # and keeps SQLite I/O out of the OneDrive-synced tree (OneDrive's
       # read-only re-flagging corrupts live databases).
