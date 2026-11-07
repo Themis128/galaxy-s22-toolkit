@@ -1,5 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "phone-insights"
 version = "1.0.0"
 description = "Degradation insights skill (implementation: tools/insights.py)"
 requires-python = ">=3.10"
+
+[project.scripts]
+phone-insights = "phone_insights:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["phone_insights"]

@@ -1,5 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "phone-retire-legacy"
 version = "1.0.0"
-description = "Legacy-tree decommission skill (implementation: tools/decommission_legacy.py)"
+description = "Legacy-tree retirement skill (implementation: tools/retire_legacy_tree.py)"
 requires-python = ">=3.10"
+
+[project.scripts]
+phone-retire-legacy = "phone_retire_legacy:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["phone_retire_legacy"]

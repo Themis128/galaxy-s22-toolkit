@@ -34,11 +34,14 @@ docker compose up -d --build    # host networking; live at 100.83.120.93:8081
 |---|---|
 | `phone-diagnostics run` | Full health report (battery, storage, thermal, network, logcat) |
 | `phone-diagnostics device` | Device identity & OS info |
-| `phone-insights` → `python tools/insights.py` | Battery drain rate, storage growth ETA, p95 memory/thermal verdicts |
-| `phone-update-check` → `python tools/update_check.py` | Security-patch age verdict; `--open-settings` opens the system update screen |
-| `phone-doctor` → `python tools/doctor.py` | Environment health (ADB, tasks, backups, OneDrive artifacts) |
-| `phone-connect` → `python tools/adb_connect.py status\|connect\|reconnect` | Wireless ADB over Tailscale control |
-| `phone-relocate` → `python tools/relocate_repo.py` | Move the repo out of OneDrive (dry-run default, `--execute`) |
+| `phone-insights` | Battery drain rate, storage growth ETA, p95 memory/thermal verdicts |
+| `phone-update-check` | Security-patch age verdict; `--open-settings` opens the system update screen |
+| `phone-doctor` | Environment health (ADB, tasks, backups, OneDrive artifacts) |
+| `phone-connect status\|connect\|reconnect` | Wireless ADB over Tailscale control |
+| `phone-relocate` | Move the repo out of OneDrive (dry-run default, `--execute`) |
+| `phone-system-update status\|open` | OTA update driver (status works locked; open needs the device unlocked) |
+| `phone-retire-legacy` | Retire the legacy OneDrive tree (dry-run default; `--execute` from outside the tree) |
+| `phone-remote-control` | Dashboard REST API client (`--allow-private` for localhost; SSRF-guarded) |
 | `phone-screen-control screenshot` | Capture PNG |
 | `phone-screen-control record --time 30` | 30 s screen recording |
 | `phone-file-transfer pull /sdcard/DCIM/Camera ./data/pulls` | Pull files with progress |

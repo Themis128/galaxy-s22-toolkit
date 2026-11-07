@@ -1,5 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "phone-system-update"
 version = "1.0.0"
 description = "OTA system-update driver skill (implementation: tools/system_update.py)"
 requires-python = ">=3.10"
+
+[project.scripts]
+phone-system-update = "phone_system_update:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["phone_system_update"]
