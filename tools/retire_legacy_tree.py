@@ -132,9 +132,44 @@ def plan(legacy: Path = LEGACY, canonical: Path = CANONICAL) -> dict[str, Any]:
     }
 
 
-def _move_tree(src_dir: Path, dst_root: Path) -> int:
-    """Move src_dir/<rel> into dst_root/<rel> (same-volume rename), merging."""
+def _hydrate(src: Path) -> bool:
+    """Force the OneDrive provider to download a cloud placeholder."""
+    try:
+        with open(src, "rb") as f:
+            f.read(1)
+        return True
+    except OSError:
+        return False
+
+
+def _move_one(src: Path, dst: Path) -> str | None:
+    """Best-effort same-volume move; hydrates cloud placeholders first.
+
+    Returns None on success, or a skip reason (WinError 362: the file is a
+    cloud-only placeholder and the provider refused to hydrate it).
+    """
+    try:
+        os.replace(src, dst)
+        return None
+    except OSError as exc:
+        if getattr(exc, "winerror", None) != 362:
+            raise
+        if not _hydrate(src):
+            return f"cloud-only placeholder, provider would not hydrate ({exc.strerror})"
+        try:
+            os.replace(src, dst)
+            return None
+        except OSError as exc2:
+            return f"still unmovable after hydration ({exc2.strerror})"
+
+
+def _move_tree(src_dir: Path, dst_root: Path) -> tuple[int, list[tuple[str, str]]]:
+    """Move src_dir/<rel> into dst_root/<rel> (same-volume rename), merging.
+
+    Never aborts the batch: unmovable cloud placeholders are reported.
+    """
     moved = 0
+    skipped: list[tuple[str, str]] = []
     for dirpath, _dirnames, filenames in os.walk(src_dir):
         rel_dir = Path(dirpath).relative_to(src_dir)
         (dst_root / rel_dir).mkdir(parents=True, exist_ok=True)
@@ -143,9 +178,12 @@ def _move_tree(src_dir: Path, dst_root: Path) -> int:
             dst = dst_root / rel_dir / f
             if dst.exists():
                 continue  # canonical copy wins; legacy data is older
-            os.replace(src, dst)
-            moved += 1
-    return moved
+            reason = _move_one(src, dst)
+            if reason is None:
+                moved += 1
+            else:
+                skipped.append((str(Path(src_dir).name / rel_dir / f), reason))
+    return moved, skipped
 
 
 def _rmtree_except(root: Path, keep: set[str]) -> list[str]:
@@ -213,8 +251,21 @@ def main() -> int:
     # 1) Move user data
     dst = CANONICAL / "data" / "legacy-mirror"
     dst.mkdir(parents=True, exist_ok=True)
-    moved = _move_tree(legacy / "data", dst)
+    moved, cloud_skipped = _move_tree(legacy / "data", dst)
     print(f"Moved data/ : {moved} files -> {dst}")
+    if cloud_skipped:
+        report = CANONICAL / "data" / "legacy-archive" / "SKIPPED-CLOUD-FILES.txt"
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text(
+            "".join(f"{path}\t{reason}\n" for path, reason in cloud_skipped),
+            encoding="utf-8",
+        )
+        print(
+            f"Cloud-only  : {len(cloud_skipped)} files could not be moved while "
+            f"the OneDrive provider refuses hydration — listed in {report}. "
+            "They remain in the legacy tree (deleting placeholders is safe; "
+            "the cloud copies survive)."
+        )
 
     # 2) Preserve personal files
     arch = CANONICAL / "data" / "legacy-archive"
