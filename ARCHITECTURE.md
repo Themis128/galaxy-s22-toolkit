@@ -47,7 +47,7 @@ The toolkit is a single-user, single-active-device suite: it adapts to whatever 
 │  /api/repair/* | /api/root* | /api/insights | /api/devin/*     │
 │  WS /ws/live (5 s broadcasts)                                  │
 ├────────────────────────────────────────────────────────────────┤
-│ .zcode/skills/   12 CLI skills (pip console scripts)           │  Layer 3 — act
+│ .zcode/skills/   20 CLI skills (pip console scripts)           │  Layer 3 — act
 │  phone-diagnostics, phone-repair, phone-insights,              │
 │  phone-connect, phone-screen-control, phone-file-transfer,     │
 │  phone-logcat, phone-app-manager, phone-update-check,          │
@@ -61,7 +61,7 @@ The toolkit is a single-user, single-active-device suite: it adapts to whatever 
 │ tools/           13 standalone utilities (doctor, insights,    │  Layer 2b — operate
 │                  alerts, backup/restore, dashboard_client, …)   │
 ├────────────────────────────────────────────────────────────────┤
-│ phone-lib/       AdbClient + 15 modules + typed models         │  Layer 1 — foundation
+│ phone-lib/       AdbClient + 16 modules + typed models         │  Layer 1 — foundation
 │  device, battery, storage, logcat, network, thermal,           │
 │  apps, screen, termux, root, repair, notify, paths,            │
 │  capabilities, models                                          │
@@ -69,6 +69,21 @@ The toolkit is a single-user, single-active-device suite: it adapts to whatever 
 ```
 
 Dependencies point strictly downward. `rooting/` and the skills are thin CLI wrappers over `phone-lib`; `diagnostics/` uses `phone-lib` for its checks; `dashboard/` uses `phone-lib` for its collectors, repair layer and root module; `tools/` are standalone (the only one that talks to the dashboard is `dashboard_client.py`).
+
+## Full Mobile Suite (v0.6.0 — Wondershare-class pillars, all open source)
+
+External pillars and their toolkit entry points: **scrcpy 5** (`tools/mirror.py`,
+skill `phone-mirror` — mirror/record/control, no root) · **libimobiledevice**
+(`phone-lib/imobile.py`, skill `phone-ios` — iTunes-free iOS backup/info/
+screenshot/apps) · **wa-crypt-tools** (Tier B WhatsApp backup decryption,
+root-gated, skill `phone-recover`) · **Heimdall** (`tools/repair_system.py`,
+skill `phone-repair-system` — Samsung stock-firmware wizard, triple-gated) ·
+WhatsApp's **official QR chat transfer** (`tools/whatsapp_transfer.py`, skill
+`phone-whatsapp`). Device **verification report** (`phone-verify`) and the
+dashboard **Device Files manager** (`/api/device/files*`) formalize the
+Phone-Manager/Verification pillars. Anti-theft bypasses (FRP/lock/iCloud/SIM)
+are excluded by design. External-binary discovery uses `tools/binfind.py`
+(winget Links/package fallback for stale PATHs).
 
 ## Data flow
 
@@ -105,6 +120,7 @@ diagnostics / skills / dashboard   MemoryInfo, RootInfo, HealthReport
 | `notify.py` | Windows toasts with Approve/Deny approval buttons | `DesktopNotifier.notify`, `request_approval_async` |
 | `capabilities.py` | Multi-Galaxy DeviceProfile detection (see below) | `detect_profile`, `describe_model` |
 | `paths.py` | Path confinement (resolve + fixed-root verification) | `confined_path` |
+| `imobile.py` | iOS devices via libimobiledevice (info/backup/restore/screenshot/apps) | `IMobileClient`, `parse_ideviceinfo` |
 | `models.py` | Typed dataclasses shared by all layers | — |
 | `exceptions.py` | PhoneError hierarchy | — |
 

@@ -22,6 +22,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "tools"))
 
+from tools.binfind import find_binary  # noqa: E402
 from tools.clean_path_artifacts import find_artifacts  # noqa: E402
 from tools.fix_onedrive_attrs import clear_flags, find_readonly  # noqa: E402
 
@@ -130,12 +131,20 @@ def check_mobile_suite() -> None:
     the gap.
     """
     probes = {
-        "scrcpy": ("scrcpy", "winget install Genymobile.scrcpy"),
-        "heimdall": ("heimdall", "winget install Glassechidna.Heimdall"),
-        "idevice_id": ("idevice_id", "install libimobiledevice (https://libimobiledevice.org)"),
+        "scrcpy": ("scrcpy", "Genymobile.scrcpy", "winget install Genymobile.scrcpy"),
+        "heimdall": (
+            "heimdall",
+            "BenjaminDobell.Heimdall",
+            "winget install BenjaminDobell.Heimdall",
+        ),
+        "idevice_id": (
+            "idevice_id",
+            None,
+            "install libimobiledevice (https://libimobiledevice.org)",
+        ),
     }
-    for label, (binary, install) in probes.items():
-        path = shutil.which(binary)
+    for label, (binary, winget_id, install) in probes.items():
+        path = find_binary(binary, winget_id)
         if path:
             check(f"mobile:{label}", True, path)
         else:
