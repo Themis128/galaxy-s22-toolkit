@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "phone-ios"
+version = "1.0.0"
+description = "iOS device skill via libimobiledevice (implementation: tools/imobile.py)"
+requires-python = ">=3.10"
+
+[project.scripts]
+phone-ios = "phone_ios:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["phone_ios"]
