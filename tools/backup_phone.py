@@ -21,7 +21,7 @@ import re
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 REPO = Path(__file__).resolve().parents[1]
 MIRROR = REPO / "data" / "phone-mirror"
@@ -33,7 +33,7 @@ if __name__ == "__main__":
 try:
     from phone import create_client
 except ImportError:  # pragma: no cover
-    create_client = None  # type: ignore[assignment,misc]
+    create_client = None  # type: ignore[assignment]
 
 # User-content roots backed up (device paths)
 BACKUP_ROOTS = (
@@ -106,7 +106,7 @@ def _walk_remote(c: Any, root: str) -> list[dict[str, Any]]:
 
 def load_manifest() -> dict[str, dict[str, Any]]:
     try:
-        return json.loads(MANIFEST.read_text(encoding="utf-8"))
+        return cast(dict[str, dict[str, Any]], json.loads(MANIFEST.read_text(encoding="utf-8")))
     except (OSError, json.JSONDecodeError):
         return {}
 
@@ -175,7 +175,7 @@ def run_backup(serial: str | None, full: bool = False) -> dict[str, Any]:
 
 def status_report() -> dict[str, Any]:
     try:
-        return json.loads(STATUS.read_text(encoding="utf-8"))
+        return cast(dict[str, Any], json.loads(STATUS.read_text(encoding="utf-8")))
     except (OSError, json.JSONDecodeError):
         return {"status": "never-run"}
 
