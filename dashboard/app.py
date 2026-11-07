@@ -949,6 +949,128 @@ async def api_repair_history() -> JSONResponse:
     )
 
 
+# ===== Device File Manager (Phone Manager pillar) =====
+
+_DEVICE_PATH_RE = re.compile(r"^[A-Za-z0-9/._\- ()]+$")
+_PULLS_DIR = Path(os.getenv("DEVICE_PULLS_DIR", str(PROJECT_ROOT / "data" / "pulls")))
+
+
+def _device_client_or_503() -> tuple[Any, JSONResponse | None]:
+    try:
+        return _ensure_client(), None
+    except (ConnectionError, OSError, PhoneError) as exc:
+        return None, JSONResponse({"error": f"Device not connected: {exc}"}, status_code=503)
+
+
+def _list_device_dir_blocking(c: Any, path: str) -> list[dict[str, Any]]:
+    """Parse `ls -la <path>` from the device into typed entries."""
+    out = c.execute("shell", "ls", "-la", path)
+    entries: list[dict[str, Any]] = []
+    for line in out.splitlines():
+        m = re.match(
+            r"^([\-dl][rwxsStT\-]{9})\s+\S+\s+\S+\s+\S+\s+(\d+)\s+"
+            r"\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+(.+)$",
+            line.rstrip(),
+        )
+        if not m:
+            continue
+        perms, size, name = m.group(1), int(m.group(2)), m.group(3)
+        kind = "dir" if perms.startswith("d") else ("link" if perms.startswith("l") else "file")
+        if name in (".", ".."):
+            continue
+        entries.append({"name": name, "kind": kind, "size": size})
+    entries.sort(key=lambda e: (e["kind"] != "dir", e["name"].lower()))
+    return entries
+
+
+def _device_pull_blocking(c: Any, remote: str, dest_dir: Path) -> dict[str, Any]:
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    name = remote.rstrip("/").split("/")[-1] or "device-item"
+    c.pull(remote, str(dest_dir / name))
+    # Report the host-visible relative path (the container binds
+    # ./data/pulls -> /app/data/pulls so the file lands on the host).
+    return {"local_path": f"data/pulls/{name}", "name": name}
+
+
+@app.get("/api/device/files")
+async def api_device_files(path: str = "/sdcard/") -> JSONResponse:
+    """List a directory on the device (Phone Manager browse)."""
+    if not _DEVICE_PATH_RE.fullmatch(path):
+        return JSONResponse({"error": "Invalid device path"}, status_code=400)
+    c, err = _device_client_or_503()
+    if err is not None:
+        return err
+    loop = asyncio.get_running_loop()
+    try:
+        entries = await loop.run_in_executor(None, _list_device_dir_blocking, c, path)
+    except PhoneError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)
+    return JSONResponse({"path": path, "entries": entries, "total": len(entries)})
+
+
+class DevicePullRequest(BaseModel):
+    remote_path: str
+
+
+@app.post("/api/device/files/pull")
+async def api_device_files_pull(request: DevicePullRequest) -> JSONResponse:
+    """Pull a file or directory from the device into data/pulls/."""
+    if not _DEVICE_PATH_RE.fullmatch(request.remote_path):
+        return JSONResponse({"error": "Invalid device path"}, status_code=400)
+    c, err = _device_client_or_503()
+    if err is not None:
+        return err
+    loop = asyncio.get_running_loop()
+    try:
+        result = await loop.run_in_executor(
+            None, _device_pull_blocking, c, request.remote_path, _PULLS_DIR
+        )
+    except PhoneError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)
+    return JSONResponse(result)
+
+
+class DeviceDeleteRequest(BaseModel):
+    path: str
+    confirm: bool = False
+
+
+@app.post("/api/device/files/delete")
+async def api_device_files_delete(request: DeviceDeleteRequest) -> JSONResponse:
+    """Delete a FILE on the device. Confirm-gated; directories refused."""
+    if not _DEVICE_PATH_RE.fullmatch(request.path):
+        return JSONResponse({"error": "Invalid device path"}, status_code=400)
+    if request.path.rstrip("/") in ("/sdcard", "/sdcard/", "/"):
+        return JSONResponse({"error": "Refusing to delete a root path"}, status_code=400)
+    if not request.confirm:
+        return JSONResponse(
+            {
+                "status": "confirmation_required",
+                "path": request.path,
+                "message": "Device file deletion requires explicit confirmation (set confirm=true).",
+            },
+            status_code=202,
+        )
+    c, err = _device_client_or_503()
+    if err is not None:
+        return err
+    loop = asyncio.get_running_loop()
+
+    def delete_file() -> None:
+        listing = c.execute("shell", "ls", "-la", request.path)
+        # Only plain files: refuse dirs and missing paths by inspecting perms.
+        first = next((ln for ln in listing.splitlines() if ln.strip().startswith("-")), None)
+        if first is None:
+            raise PhoneError("Path is not a plain file (missing or a directory)")
+        c.execute("shell", "rm", "--", request.path)
+
+    try:
+        await loop.run_in_executor(None, delete_file)
+    except PhoneError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+    return JSONResponse({"deleted": request.path})
+
+
 # ===== Root / Magisk API (root card) =====
 
 # Magisk module ids are directory names under /data/adb/modules; this

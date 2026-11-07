@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "phone-verify"
+version = "1.0.0"
+description = "Resale-style device verification report skill (implementation: tools/verify_device.py)"
+requires-python = ">=3.10"
+
+[project.scripts]
+phone-verify = "phone_verify:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["phone_verify"]

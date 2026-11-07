@@ -27,6 +27,9 @@ services:
       # append to the SAME JSONL so the history view shows both. Safe bind:
       # the repo lives in C:\dev (outside OneDrive's read-only re-flagging).
       - ./logs:/app/logs
+      # Pulled device files land on the HOST's data/pulls (browsable, survives
+      # container rebuilds).
+      - ./data/pulls:/app/data/pulls
       # Named volume (not a host bind): survives rebuilds and `compose down`,
       # and keeps SQLite I/O out of the OneDrive-synced tree (OneDrive's
       # read-only re-flagging corrupts live databases).
