@@ -140,6 +140,27 @@ def check_container() -> None:
         check("dashboard", False, str(exc))
 
 
+def check_mobile_suite() -> None:
+    """Full Mobile Suite external pillars: scrcpy, Heimdall, libimobiledevice.
+
+    Missing tools are reported with the exact winget/install line so the fix
+    is one paste away. Absence is advisory (each suite feature degrades to an
+    honest 'tool not installed' message) but still counted so doctor surfaces
+    the gap.
+    """
+    probes = {
+        "scrcpy": ("scrcpy", "winget install Genymobile.scrcpy"),
+        "heimdall": ("heimdall", "winget install Glassechidna.Heimdall"),
+        "idevice_id": ("idevice_id", "install libimobiledevice (https://libimobiledevice.org)"),
+    }
+    for label, (binary, install) in probes.items():
+        path = shutil.which(binary)
+        if path:
+            check(f"mobile:{label}", True, path)
+        else:
+            check(f"mobile:{label}", False, f"not installed — {install}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--fix", action="store_true", help="apply safe fixes")
@@ -152,6 +173,7 @@ def main() -> int:
     check_backup()
     check_wsl()
     check_container()
+    check_mobile_suite()
     if args.fix:
         # Re-import at runtime (TYPE_CHECKING stubs don't exist at runtime)
         try:

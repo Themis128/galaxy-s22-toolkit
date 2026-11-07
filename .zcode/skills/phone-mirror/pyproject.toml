@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "phone-mirror"
+version = "1.0.0"
+description = "Screen mirror & control skill via scrcpy (implementation: tools/mirror.py)"
+requires-python = ">=3.10"
+
+[project.scripts]
+phone-mirror = "phone_mirror:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["phone_mirror"]
