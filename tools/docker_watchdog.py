@@ -24,7 +24,13 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 LOG = REPO / "logs" / "docker-watchdog.log"
-DOCKER_DESKTOP = Path(r"C:\Program Files\Docker\Docker\Docker Desktop.exe")
+# Docker Desktop is installed per-user on this host; the Program Files path
+# does not exist, so Popen silently failed and "healing" only worked when DD
+# restarted on its own. Try per-user first, then machine-wide.
+DOCKER_DESKTOP_CANDIDATES = [
+    Path(r"C:\Users\tbaltzakis\AppData\Local\Programs\DockerDesktop\Docker Desktop.exe"),
+    Path(r"C:\Program Files\Docker\Docker\Docker Desktop.exe"),
+]
 LOG_CAP = 1_000_000
 
 
@@ -56,12 +62,15 @@ def engine_up() -> bool:
 
 
 def start_desktop() -> None:
-    if DOCKER_DESKTOP.exists():
-        try:
-            subprocess.Popen([str(DOCKER_DESKTOP)])
-            log("Docker Desktop started")
-        except OSError as exc:
-            log(f"Docker Desktop start failed: {exc}")
+    for exe in DOCKER_DESKTOP_CANDIDATES:
+        if exe.exists():
+            try:
+                subprocess.Popen([str(exe)])
+                log(f"Docker Desktop started ({exe})")
+                return
+            except OSError as exc:
+                log(f"Docker Desktop start failed ({exe}): {exc}")
+    log("Docker Desktop start failed: no known install path found")
 
 
 def compose_up() -> bool:
@@ -81,14 +90,14 @@ def compose_up() -> bool:
 def heal() -> bool:
     log("engine down — healing")
     start_desktop()
-    deadline = time.monotonic() + 180
+    deadline = time.monotonic() + 360
     while time.monotonic() < deadline:
         time.sleep(15)
         if engine_up():
             log("engine recovered")
             break
     else:
-        log("engine STILL down after 3 min — giving up until the next run")
+        log("engine STILL down after 6 min — giving up until the next run")
         return False
     if compose_up():
         log("dashboard compose up OK")
