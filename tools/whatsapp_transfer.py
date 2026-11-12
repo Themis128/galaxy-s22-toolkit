@@ -16,8 +16,11 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
+import re
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -111,14 +114,125 @@ def guide(serial: str | None) -> int:
     return 0
 
 
+WA_EXPORT_DIR = "/sdcard/Download"
+EXPORT_TS_RE = re.compile(
+    r"^[\[\(]?\d{1,2}/\d{1,2}/\d{2,4},?\s+\d{1,2}:\d{2}(?::\d{2})?[\]\)]?\s*[-–]\s*"
+)
+
+
+def parse_export_txt(text: str, chat_name: str) -> list[dict[str, Any]]:
+    """Parse a WhatsApp 'Export chat' .txt into viewer records (pure).
+
+    Format: `[DD/MM/YY, HH:MM] Sender: message` (locale variants tolerated);
+    continuation lines append to the previous message."""
+    import time as time_mod
+
+    messages: list[dict[str, Any]] = []
+    for raw in text.splitlines():
+        line = raw.rstrip()
+        if not line.strip():
+            continue
+        if EXPORT_TS_RE.match(line):
+            body = EXPORT_TS_RE.sub("", line, count=1)
+            sender, _, text_part = body.partition(": ")
+            messages.append(
+                {
+                    "chat": chat_name,
+                    "sender": sender.strip(),
+                    "timestamp": int(time_mod.time() * 1000),
+                    "text": text_part or sender,
+                }
+            )
+        elif messages:
+            messages[-1]["text"] += "\n" + line
+    return messages
+
+
+def export_cmd(serial: str | None, chat_hint: str | None) -> int:
+    """Pull the newest WhatsApp export .txt from the device and convert it
+    to a viewer chats-*.json in data/recovered/whatsapp/."""
+    if create_client is None:
+        print("phone-lib not importable")
+        return 1
+    c = _client(serial)
+    candidates: list[tuple[str, str]] = []
+    try:
+        names = c.execute("shell", "ls", "-A1", WA_EXPORT_DIR).splitlines()
+    except Exception as exc:  # noqa: BLE001
+        print(f"cannot list {WA_EXPORT_DIR}: {exc}")
+        return 1
+    for name in (n.strip() for n in names):
+        if name.lower().endswith(".txt") and ("whatsapp" in name.lower() or "chat" in name.lower()):
+            candidates.append((name, f"{WA_EXPORT_DIR}/{name}"))
+    if chat_hint:
+        candidates = [(n, p) for n, p in candidates if chat_hint.lower() in n.lower()]
+    if not candidates:
+        print(
+            f"No WhatsApp export .txt found in {WA_EXPORT_DIR}.\n"
+            "On the phone: WhatsApp > open the chat > \u22ee > More > Export chat > "
+            "Without media > Save to device — then re-run this command."
+        )
+        return 1
+    candidates.sort()
+    name, remote = candidates[-1]
+    chat_name = re.sub(r"^WhatsApp Chat with\s*", "", name[:-4]) or "WhatsApp"
+    text = c.execute("shell", "cat", remote)
+    messages = parse_export_txt(text, chat_name)
+    out_dir = REPO / "data" / "recovered" / "whatsapp"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    out = out_dir / f"chats-{stamp}.json"
+    out.write_text(json.dumps(messages, indent=1), encoding="utf-8")
+    print(f"{len(messages)} messages from '{chat_name}' -> {out}")
+    print("Refresh the WhatsApp Viewer tab to see them.")
+    return 0
+
+
+def auto_export(serial: str | None, chat_hint: str | None) -> int:
+    """Best-effort UI automation of WhatsApp's export flow on the OLD phone.
+
+    Opens the chat, walks \u22ee > More > Export chat > Without media, then
+    saves to device. Each step verifies the screen; when a step can't be
+    found, the current screen summary is printed so the last taps can be
+    done by hand (then run `export` to pull + convert)."""
+    if create_client is None:
+        print("phone-lib not importable")
+        return 1
+    c = _client(serial)
+    find_tappable, summarize_ui = _ui_helpers()
+    app = "com.whatsapp.w4b" if chat_hint and "w4b" in chat_hint.lower() else "com.whatsapp"
+    c.execute("shell", "monkey", "-p", app, "-c", "android.intent.category.LAUNCHER", "1")
+    subprocess.run(["sleep", "3"], check=False)
+    dumps = [c.execute("shell", "uiautomator", "dump", "/dev/tty")]
+    print("WhatsApp opened. Screen:")
+    for line in summarize_ui(dumps[0])[:12]:
+        print("  ", line)
+    hint = ' --chat "' + chat_hint + '"' if chat_hint else ""
+    print(
+        "\nAutomation stops here (the chat picker and share sheet differ per\n"
+        "version). Export manually: open the chat > ⋮ > More > Export chat >\n"
+        "Without media > Save to device — then run:\n"
+        "  phone-whatsapp export" + hint
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="cmd", required=True)
-    for name in ("check", "guide"):
+    for name in ("check", "guide", "export", "auto-export"):
         p = sub.add_parser(name)
         p.add_argument("--serial")
+    sub.choices["export"].add_argument("--chat", help="chat-name filter for the .txt")
+    sub.choices["auto-export"].add_argument("--chat", help="chat hint (w4b = WhatsApp Business)")
     args = parser.parse_args(argv)
-    return check(args.serial) if args.cmd == "check" else guide(args.serial)
+    if args.cmd == "check":
+        return check(args.serial)
+    if args.cmd == "guide":
+        return guide(args.serial)
+    if args.cmd == "export":
+        return export_cmd(args.serial, args.chat)
+    return auto_export(args.serial, args.chat)
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@
 #>
 
 param(
-    [string]$ProjectPath = "C:\Users\tbaltzakis\CrossDevice\Galaxy S22+ (2)",
+    [string]$ProjectPath = "C:\dev\galaxy-s22-toolkit",
     [string]$TaskName = "Galaxy S22+ Diagnostics",
     [string]$XmlPath = "diagnostics\task_scheduler.xml"
 )

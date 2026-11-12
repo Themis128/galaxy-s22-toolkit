@@ -211,9 +211,12 @@
     </style>
 </head>
 <body>
-    <div class="header">
+    <div class="header" style="position: relative;">
         <h1>📱 <span id="dashboard-title">Galaxy Toolkit</span> Monitoring Dashboard</h1>
         <span class="status" id="overall-status">UNKNOWN</span>
+        <nav style="position: absolute; right: 1rem; top: 50%; transform: translateY(-50%); display: flex; gap: 0.6rem;">
+            <a href="/whatsapp" style="color:#cfe0ff; text-decoration:none; font-size:0.9rem; background:rgba(255,255,255,0.08); padding:0.4rem 0.8rem; border-radius:6px;">💬 WhatsApp Viewer</a>
+        </nav>
     </div>
     
     <div class="container">

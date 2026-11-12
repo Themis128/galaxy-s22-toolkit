@@ -60,6 +60,9 @@ logger = logging.getLogger(__name__)
 COLLECT_INTERVAL_S = 5
 MAX_HISTORY = 17_280  # 24 h at 5 s cadence (in-memory ring buffer for WS live)
 MAX_DB_SNAPSHOTS = 172_800  # ~10 days at 5 s cadence (persisted to SQLite)
+# /api/health serves the collector's last snapshot when it is at most this
+# old; beyond that (device was unplugged, collector stuck) it collects fresh.
+HEALTH_CACHE_MAX_AGE_S = 3 * COLLECT_INTERVAL_S
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
@@ -79,6 +82,23 @@ DEVIN_WORKDIR = Path(os.getenv("DEVIN_WORKDIR", str(Path.home() / "Devin")))
 manager: ConnectionManager | None = None
 client: Any = None  # PhoneClient type but no stubs
 history: list[dict[str, Any]] = []
+
+
+def _fresh_cached_snapshot(max_age_s: float) -> dict[str, Any] | None:
+    """history[-1] when it is newer than max_age_s, else None (pure).
+
+    Lets read endpoints answer from the collector's ring buffer instead of
+    re-collecting from the device per request."""
+    if not history:
+        return None
+    snap = history[-1]
+    try:
+        age = (datetime.now() - datetime.fromisoformat(snap["timestamp"])).total_seconds()
+    except (KeyError, ValueError, TypeError):
+        return None
+    if age < 0 or age >= max_age_s:
+        return None
+    return snap
 
 
 async def verify_api_key(
@@ -415,11 +435,18 @@ async def dashboard(request: Request) -> HTMLResponse:
 
 @app.get("/api/health")
 async def api_health(serial: str | None = None) -> JSONResponse:
-    """Current snapshot (triggers a fresh collection).
+    """Current snapshot: served from the collector's cache when fresh.
 
-    Fleet scaffold: `?serial=S` collects from that specific device instead of
-    the dashboard's default client (transient client — the global collector
-    keeps its own device)."""
+    The collector loop refreshes a full snapshot every COLLECT_INTERVAL_S, so
+    a fresh collection per request only adds concurrent device load (battle
+    test: N parallel requests each ran _collect_once against the one phone
+    and stalled every round >6 s). Falls back to an on-demand collection
+    only when history is empty or stale; `?serial=` always collects fresh
+    because it targets a device the collector is not watching."""
+    if not serial:
+        cached = _fresh_cached_snapshot(HEALTH_CACHE_MAX_AGE_S)
+        if cached is not None:
+            return JSONResponse(cached)
     loop = asyncio.get_running_loop()
     try:
         if serial:
@@ -584,6 +611,9 @@ def _load_tool(name: str) -> Any:
 
 
 _insights_cache: tuple[float, dict[str, Any]] | None = None
+# Single-flight: concurrent cold requests await this one shared future
+# instead of each spawning their own SQL scan in the executor.
+_insights_inflight: asyncio.Future[dict[str, Any]] | None = None
 INSIGHTS_TTL_S = 60
 
 
@@ -614,17 +644,30 @@ def _analyze_insights_blocking() -> dict[str, Any]:
 
 
 async def _insights_report() -> dict[str, Any]:
-    """Insights with a 60 s TTL cache; the analysis runs in the executor so
-    the event loop never blocks (a 7-day scan takes tens of seconds and
-    previously stalled every other request)."""
-    global _insights_cache
-    loop = asyncio.get_running_loop()
+    """Insights with a 60 s TTL cache and single-flight compute.
+
+    The analysis runs in the executor so the event loop never blocks (a
+    7-day scan takes tens of seconds and previously stalled every other
+    request). Concurrent cold requests await the SAME in-flight future
+    instead of each spawning their own scan — the battle test showed N
+    concurrent cold requests each re-computing (and none caching on
+    failure), so a burst kept the executor saturated for N x scan time."""
+    global _insights_cache, _insights_inflight
     now = time.monotonic()
     if _insights_cache is not None and now - _insights_cache[0] < INSIGHTS_TTL_S:
         return _insights_cache[1]
-    report = await loop.run_in_executor(None, _analyze_insights_blocking)
-    _insights_cache = (now, report)
-    return report
+    if _insights_inflight is None:
+        loop = asyncio.get_running_loop()
+        _insights_inflight = loop.run_in_executor(None, _analyze_insights_blocking)
+        try:
+            report = await _insights_inflight
+        finally:
+            _insights_inflight = None
+        # Only successful computes populate the cache; failures retry on
+        # the next request instead of caching an error for 60 s.
+        _insights_cache = (time.monotonic(), report)
+        return report
+    return await _insights_inflight
 
 
 @app.get("/api/alerts")
@@ -632,17 +675,18 @@ async def api_alerts() -> JSONResponse:
     """Active alerts from the current metrics history (stateless)."""
     insights_mod = _load_tool("insights")
     alerts_mod = _load_tool("alerts")
-    loop = asyncio.get_running_loop()
     # Shallow-copies the list so the patch-age append never mutates the cache.
     insights = list((await _insights_report())["insights"])
-    # Patch age comes straight from the connected phone here (the
-    # container has no diagnostics reports to read).
+    # Patch level from the collector's latest snapshot — the collector
+    # already knows it; a per-request getprop round-trip to the phone is
+    # device load a read endpoint does not need.
     try:
         from datetime import date
 
-        patch = await loop.run_in_executor(
-            None, lambda: _ensure_client().device.get_security_patch()
-        )
+        snap = history[-1] if history else None
+        patch = str((snap or {}).get("device", {}).get("security_patch") or "")
+        if not patch:
+            raise LookupError("no snapshot with a security patch yet")
         patch_days = (date.today() - datetime.strptime(patch[:10], "%Y-%m-%d").date()).days
         insights.append(
             {
@@ -652,7 +696,7 @@ async def api_alerts() -> JSONResponse:
                 "verdict": ("OK" if patch_days < 90 else "WATCH" if patch_days <= 180 else "ACT"),
             }
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - degrade to no patch-age insight
         logger.warning("alerts: patch age unavailable: %s", exc)
     return JSONResponse(
         {
@@ -1222,16 +1266,22 @@ def _register_devices(attached: list[dict[str, str]]) -> list[dict[str, Any]]:
     except (OSError, ValueError):
         pass
     seen = {d.get("serial") for d in known}
-    for d in attached:
-        if d["state"] == "device" and d["serial"] not in seen:
-            known.append(
-                {
-                    "serial": d["serial"],
-                    "model": d["model"],
-                    "first_seen": datetime.now().isoformat(),
-                }
-            )
-            seen.add(d["serial"])
+    additions = [
+        d
+        for d in attached
+        if d["state"] == "device" and d["serial"] not in seen
+    ]
+    if not additions:
+        # Read-mostly: a GET must not rewrite the registry on every hit.
+        return known
+    for d in additions:
+        known.append(
+            {
+                "serial": d["serial"],
+                "model": d["model"],
+                "first_seen": datetime.now().isoformat(),
+            }
+        )
     reg_path.parent.mkdir(parents=True, exist_ok=True)
     reg_path.write_text(json.dumps(known, indent=1), encoding="utf-8")
     return known

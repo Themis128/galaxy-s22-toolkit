@@ -111,7 +111,10 @@ def storage_growth(conn: sqlite3.Connection, days: int = 14) -> dict[str, Any]:
     # partition is /data, found by mount_point, not by index.
     daily = _daily_means(_storage_metric(conn, "used_gb", days))
     per_week = _slope_per_week(daily)
-    total = _storage_metric(conn, "total_gb", days)[-1][1]
+    storage_rows = _storage_metric(conn, "total_gb", days)
+    # Empty database (fresh install, no snapshots yet) must degrade to the
+    # NO DATA verdict, not IndexError.
+    total = storage_rows[-1][1] if storage_rows else None
     eta_days = None
     if per_week is not None and per_week > 0.01 and total:
         headroom = max(0.0, 0.9 * total - daily[-1][1])
