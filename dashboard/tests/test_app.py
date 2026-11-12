@@ -458,9 +458,7 @@ class TestBattleTestRegressions:
         monkeypatch.setattr(app_module, "PROJECT_ROOT", tmp_path)
         before = reg.read_text(encoding="utf-8")
 
-        known = app_module._register_devices(
-            [{"serial": "S1", "state": "device", "model": "M1"}]
-        )
+        known = app_module._register_devices([{"serial": "S1", "state": "device", "model": "M1"}])
         assert [d["serial"] for d in known] == ["S1"]
         assert reg.read_text(encoding="utf-8") == before  # no rewrite on repeat GET
 

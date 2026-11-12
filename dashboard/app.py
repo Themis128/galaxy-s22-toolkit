@@ -1266,11 +1266,7 @@ def _register_devices(attached: list[dict[str, str]]) -> list[dict[str, Any]]:
     except (OSError, ValueError):
         pass
     seen = {d.get("serial") for d in known}
-    additions = [
-        d
-        for d in attached
-        if d["state"] == "device" and d["serial"] not in seen
-    ]
+    additions = [d for d in attached if d["state"] == "device" and d["serial"] not in seen]
     if not additions:
         # Read-mostly: a GET must not rewrite the registry on every hit.
         return known
