@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,6 +17,12 @@ from tools.insights import (  # noqa: E402
     percentile_pressure,
     storage_growth,
 )
+
+
+def _base(days_ago: float) -> datetime:
+    """UTC-naive timestamp `days_ago` before now — DB analyzers filter by
+    a rolling window, so hardcoded dates decay into NO DATA over time."""
+    return datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days_ago)
 
 
 def _seed_db(tmp_path: Path, snapshots: list[tuple[str, str]]) -> sqlite3.Connection:
@@ -91,7 +97,7 @@ class TestDailyMeans:
 
 class TestBatteryDrain:
     def test_median_drain_from_lookback_pairs(self, tmp_path: Path) -> None:
-        base = datetime(2026, 11, 4, 12, 0)
+        base = _base(2)
         snaps = []
         # Discharging at 10%/h, sampled every 30 min (the analyzer treats
         # >15%/h as a glitch, so the synthetic drain must stay under it)
@@ -105,7 +111,7 @@ class TestBatteryDrain:
         assert result["verdict"] == "OK"
 
     def test_charging_samples_excluded(self, tmp_path: Path) -> None:
-        base = datetime(2026, 11, 4, 12, 0)
+        base = _base(2)
         snaps = []
         for i in range(5):
             ts = base + timedelta(minutes=30 * i)
@@ -114,7 +120,7 @@ class TestBatteryDrain:
         assert battery_drain_rate(conn, days=7)["value"] is None
 
     def test_glitches_filtered_by_plausibility(self, tmp_path: Path) -> None:
-        base = datetime(2026, 11, 4, 12, 0)
+        base = _base(2)
         snaps = []
         # 1%/h real drain + a glitch pair (40% drop in 30 min = 80%/h)
         snaps.append(_snap(base, 90.0))
@@ -129,7 +135,7 @@ class TestBatteryDrain:
 
 class TestStorageGrowth:
     def test_growth_and_eta(self, tmp_path: Path) -> None:
-        base = datetime(2026, 11, 1)
+        base = _base(7)
         snaps = []
         for day in range(5):  # +1 GB/day on a 225 GB partition
             ts = base + timedelta(days=day)
@@ -142,7 +148,7 @@ class TestStorageGrowth:
         assert result["verdict"] == "ACT"  # >2 GB/week
 
     def test_insufficient_history_is_no_data(self, tmp_path: Path) -> None:
-        base = datetime(2026, 11, 4)
+        base = _base(2)
         snaps = [_snap(base, 50.0, status="Full")]
         conn = _seed_db(tmp_path, snaps)
         result = storage_growth(conn, days=14)
@@ -151,7 +157,7 @@ class TestStorageGrowth:
 
     def test_finds_data_not_storage0(self, tmp_path: Path) -> None:
         """storage[0] is '/' on Samsung; /data must be found by name."""
-        base = datetime(2026, 11, 1)
+        base = _base(6)
         snaps = []
         for day in range(4):
             snaps.append(
@@ -162,7 +168,7 @@ class TestStorageGrowth:
         assert result["value"] is not None  # slope from /data, not '/'
 
     def test_p95_pressure(self, tmp_path: Path) -> None:
-        base = datetime(2026, 11, 1)
+        base = _base(6)
         snaps = []
         for i in range(100):
             ts = base + timedelta(hours=i)
