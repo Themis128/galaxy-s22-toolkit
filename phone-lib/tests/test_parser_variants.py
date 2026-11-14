@@ -48,7 +48,7 @@ BATTERY_DUMPSYS_API29 = """Current Battery Service state:
   Max charging current: 0
   Max charging voltage: 0
   Charge counter: 3200
-  current now: 76000
+  current now: 220000
   status: 2
   health: 2
   present: true
@@ -144,8 +144,9 @@ class TestBatteryParserVariants:
         assert battery.status == BatteryStatus.CHARGING
         assert battery.temperature_c == 29.5
         assert battery.voltage_mv == 4123
-        # current_now in dumpsys is raw µA (not converted to mA in this path)
-        assert battery.current_ma == 76000
+        # current_now in dumpsys is µA (220 mA via USB) - the shared
+        # magnitude check normalizes it to mA
+        assert battery.current_ma == 220
         # charge_counter in µAh: 3200 µAh = 3.2 mAh (too small, sanity check fails -> None)
         # charge_cycles is NOT set in get_battery_info(); use get_charge_cycles() method
         assert battery.charge_cycles is None
@@ -169,8 +170,8 @@ class TestBatteryParserVariants:
         assert battery.status == BatteryStatus.CHARGING
         assert battery.temperature_c == 30.0
         assert battery.voltage_mv == 4250
-        # current_now: -415000 µA (raw from dumpsys, not converted)
-        assert battery.current_ma == -415000
+        # current_now: -415000 µA -> -415 mA
+        assert battery.current_ma == -415
         assert battery.charge_cycles is None
         assert module.get_charge_cycles() == 45
 
@@ -192,7 +193,7 @@ class TestBatteryParserVariants:
         assert battery.status == BatteryStatus.CHARGING
         assert battery.temperature_c == 31.0
         assert battery.voltage_mv == 4320
-        assert battery.current_ma == -320000
+        assert battery.current_ma == -320  # -320000 µA -> -320 mA
         assert battery.charge_cycles is None
         assert module.get_charge_cycles() == 48
 
@@ -214,7 +215,7 @@ class TestBatteryParserVariants:
         assert battery.status == BatteryStatus.CHARGING
         assert battery.temperature_c == 29.9
         assert battery.voltage_mv == 4272
-        assert battery.current_ma == -415000
+        assert battery.current_ma == -415  # -415000 µA -> -415 mA
         assert battery.charge_cycles is None
         assert module.get_charge_cycles() == 50
 
@@ -664,7 +665,7 @@ class TestBatteryFallbackChains:
 """
                 return BATTERY_DUMPSYS_API36  # Second call has current_now
             elif args == ("shell", "cat", "/sys/class/power_supply/battery/current_now"):
-                return "76000\n"  # µA
+                return "415000\n"  # µA -> 415 mA via the shared magnitude check
             elif args == ("shell", "dumpsys", "batterystats", "--checkin"):
                 return BATTERYSTATS_API36
             return ""
@@ -674,10 +675,42 @@ class TestBatteryFallbackChains:
         module = BatteryModule(mock_adb_client)
         battery = module.get_battery_info()
 
-        # The fallback to sysfs may or may not work depending on implementation
-        # At minimum, get_battery_info should not crash
+        # dumpsys leg yielded no plausible current; sysfs µA 415000 -> 415 mA
+        assert battery.current_ma == 415
         assert battery.level == 78
         assert battery.health == BatteryHealth.GOOD
+
+    def test_battery_ambiguous_current_degrades_to_none(self, mock_adb_client):
+        """A reading in the ambiguous band (20k..100k) is dropped, not guessed."""
+
+        def mock_execute(*args, **kwargs):
+            if args == ("shell", "dumpsys", "battery"):
+                return BATTERY_DUMPSYS_API36.replace("current now: -415000", "current now: -76000")
+            return ""
+
+        mock_adb_client.execute.side_effect = mock_execute
+
+        module = BatteryModule(mock_adb_client)
+        battery = module.get_battery_info()
+
+        assert battery.current_ma is None
+
+    def test_battery_zero_current_falls_back_to_sysfs(self, mock_adb_client):
+        """A zero dumpsys current is not plausible -> the sysfs leg runs."""
+
+        def mock_execute(*args, **kwargs):
+            if args == ("shell", "dumpsys", "battery"):
+                return BATTERY_DUMPSYS_API36.replace("current now: -415000", "current now: 0")
+            elif args == ("shell", "cat", "/sys/class/power_supply/battery/current_now"):
+                return "-320000\n"  # µA discharging -> -320 mA
+            return ""
+
+        mock_adb_client.execute.side_effect = mock_execute
+
+        module = BatteryModule(mock_adb_client)
+        battery = module.get_battery_info()
+
+        assert battery.current_ma == -320
 
     def test_battery_fallback_no_charge_cycles(self, mock_adb_client):
         """When batterystats checkin fails, charge_cycles is None."""

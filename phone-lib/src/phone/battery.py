@@ -76,13 +76,16 @@ class BatteryModule:
             plugged_type = "Wireless"
 
         # dumpsys battery exposes instantaneous current and the coulomb
-        # counter on Samsung devices; on some generations the line is
-        # absent, so fall back to sysfs power_supply before giving up.
+        # counter on Samsung devices; the line is absent on some
+        # generations and unit (µA vs mA) varies on others, so the reading
+        # goes through the shared magnitude sanity check before the sysfs
+        # fallback runs.
         current_ma: int | None = None
         for key in ("current now", "Current now"):
             if key in data and data[key].lstrip("-").isdigit():
-                current_ma = int(data[key])
-                break
+                current_ma = self._plausible_current_ma(int(data[key]))
+                if current_ma is not None:
+                    break
         if current_ma is None:
             current_ma = self._read_sysfs_current()
 
@@ -115,14 +118,27 @@ class BatteryModule:
             scale=scale,
         )
 
-    def _read_sysfs_current(self) -> int | None:
-        """Read instantaneous battery current from sysfs power_supply.
+    @staticmethod
+    def _plausible_current_ma(raw: int) -> int | None:
+        """Normalize a raw current reading to mA, or None when implausible.
 
-        Units differ across kernels (µA on most Samsung kernels, mA on
-        some Qualcomm ones) and the sign convention is not standardised,
-        so a magnitude check picks the unit and implausible values are
-        discarded as None.
+        Shared by both legs of the fallback chain (dumpsys `current now`
+        and sysfs `current_now`): kernels differ in unit (µA on most
+        Samsung kernels, mA on some Qualcomm ones) and the sign convention
+        is not standardised, so magnitude picks the unit and implausible
+        values are discarded as None. Values in the ambiguous band
+        20000 < |raw| <= 100000 - plausible in either unit - are dropped
+        rather than guessed.
         """
+        ma = raw
+        if abs(ma) > 100000:  # magnitude says kernel reported µA - convert to mA
+            ma = int(ma / 1000)
+        if 0 < abs(ma) <= 20000:  # plausible instantaneous range
+            return ma
+        return None
+
+    def _read_sysfs_current(self) -> int | None:
+        """Read instantaneous battery current from sysfs power_supply."""
         try:
             out = self.client.execute(
                 "shell",
@@ -135,12 +151,7 @@ class BatteryModule:
         val = out.strip()
         if not val.lstrip("-").isdigit():
             return None
-        ma = int(val)
-        if abs(ma) > 100000:  # kernel reports µA - convert to mA
-            ma = int(ma / 1000)
-        if 0 < abs(ma) <= 20000:  # plausible instantaneous range
-            return ma
-        return None
+        return self._plausible_current_ma(int(val))
 
     def _get_batterystats_extras(self) -> dict[str, Any]:
         """Get additional battery stats from dumpsys batterystats."""

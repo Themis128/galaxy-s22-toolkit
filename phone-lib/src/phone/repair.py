@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -259,6 +260,55 @@ class RepairModule:
     for _gen in sorted(SAMSUNG_BLOATWARE_BY_GEN):
         SAMSUNG_BLOATWARE.extend(SAMSUNG_BLOATWARE_BY_GEN[_gen])
 
+    # ===== Bloatware generation filtering =====
+
+    @classmethod
+    def bloatware_for_one_ui(cls, one_ui_major: int | None) -> list[str]:
+        """Bloatware targets applicable to a One-UI generation.
+
+        Keys in SAMSUNG_BLOATWARE_BY_GEN are the minimum One-UI generation
+        an entry shipped in; entries from lower generations stay applicable
+        to newer ones. An unknown generation (None) conservatively returns
+        every entry - the installed-package filter in
+        _repair_disable_bloatware turns inapplicable entries into no-ops
+        anyway.
+        """
+        if one_ui_major is None:
+            return list(cls.SAMSUNG_BLOATWARE)
+        applicable: list[str] = []
+        for gen in sorted(cls.SAMSUNG_BLOATWARE_BY_GEN):
+            if gen <= one_ui_major:
+                applicable.extend(cls.SAMSUNG_BLOATWARE_BY_GEN[gen])
+        return applicable
+
+    @staticmethod
+    def _one_ui_major_from_prop(raw: str) -> int | None:
+        """Samsung One-UI version prop value -> major version, else None.
+
+        Accepts the OOSSPP integer form (ro.build.version.oneui, e.g.
+        60100 = One UI 6.0.1) and the dotted form (ro.config.oneui_version,
+        e.g. '6.0'); anything else degrades to None (unknown).
+        """
+        raw = raw.strip()
+        if raw.isdigit() and len(raw) >= 5:
+            return int(raw) // 10000
+        m = re.match(r"^(\d+)\.", raw)
+        if m:
+            return int(m.group(1))
+        return None
+
+    def _detect_one_ui_major(self) -> int | None:
+        """One-UI major version of the attached device, None when unknown."""
+        for prop in ("ro.build.version.oneui", "ro.config.oneui_version"):
+            try:
+                raw = self.client.execute("shell", "getprop", prop, check=False)
+            except Exception:
+                continue
+            major = self._one_ui_major_from_prop(str(raw))
+            if major is not None:
+                return major
+        return None
+
     def __init__(
         self,
         client: AdbClient,
@@ -359,7 +409,6 @@ class RepairModule:
         if len(self.history) > self.history_max_entries:
             self.history = self.history[-self.history_max_entries :]
         if not self.history_path:
-            return
             return
         try:
             self.history_path.parent.mkdir(parents=True, exist_ok=True)
@@ -778,17 +827,23 @@ class RepairModule:
         )
 
     async def _repair_disable_bloatware(self, **kwargs: Any) -> RepairResult:
-        """Disable common Samsung bloatware.
+        """Disable Samsung bloatware for this One-UI generation.
 
         One `pm list packages` round-trip partitions installed/enabled,
-        installed/disabled, and absent packages in Python, so the action
-        is model-agnostic: bloatware entries that don't exist on this
-        Galaxy generation (S Voice on Note20, VR Service on A-series...)
-        are counted as absent, not attempted.
+        installed/disabled, and absent packages in Python, and the target
+        list is first narrowed to the device's One-UI generation, so the
+        action is model-agnostic: entries that don't exist on this Galaxy
+        generation (S Voice on Note20, VR Service on A-series...) are
+        filtered out before any `pm disable-user` call or counted as
+        absent.
         """
         disabled = []
         already_disabled = []
         absent = []
+
+        one_ui_major = self._detect_one_ui_major()
+        targets = self.bloatware_for_one_ui(one_ui_major)
+        filtered_out = sorted(set(self.SAMSUNG_BLOATWARE) - set(targets))
 
         installed: set[str] = set()
         disabled_set: set[str] = set()
@@ -810,7 +865,7 @@ class RepairModule:
             installed = set()
             disabled_set = set()
 
-        for pkg in self.SAMSUNG_BLOATWARE:
+        for pkg in targets:
             if installed and pkg not in installed:
                 absent.append(pkg)
                 continue
@@ -834,6 +889,7 @@ class RepairModule:
                 "disabled": disabled,
                 "already_disabled": already_disabled,
                 "absent_on_model": absent,
+                "filtered_by_generation": filtered_out,
             },
             requires_reboot=False,
         )

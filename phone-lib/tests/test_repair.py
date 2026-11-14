@@ -150,3 +150,88 @@ class TestRadioToggleTransportGuard:
         result = await repair._repair_reset_wifi()
         assert result.success is True
         assert repair.client.execute_async.call_count >= 2
+
+
+class TestBloatwareGenerationFilter:
+    """One-UI-generation-aware bloatware target selection (multi-Galaxy Phase 2)."""
+
+    @staticmethod
+    def _client_with_oneui(mock_adb_client, raw: str) -> None:
+        """Make `shell getprop ro.build.version.oneui` return `raw`."""
+        base = mock_adb_client.execute.side_effect
+
+        def side_effect(*args, **kwargs):
+            if args[:3] == ("shell", "getprop", "ro.build.version.oneui"):
+                return raw
+            # RepairModule issues pm list as a single shell string
+            if args[:2] == ("shell", "pm list packages -d"):
+                return "package:com.bloatware.app\n"
+            if args[:2] == ("shell", "pm list packages"):
+                return (
+                    "package:com.android.systemui\n"
+                    "package:com.example.app\n"
+                    "package:com.samsung.android.app.spage\n"
+                )
+            return base(*args, **kwargs)
+
+        mock_adb_client.execute.side_effect = side_effect
+        mock_adb_client.execute_async.side_effect = side_effect
+
+    def test_bloatware_for_one_ui_matrix(self):
+        """Generation math: entries from lower generations stay applicable."""
+        flat = RepairModule.SAMSUNG_BLOATWARE
+        by_gen = RepairModule.SAMSUNG_BLOATWARE_BY_GEN
+        assert RepairModule.bloatware_for_one_ui(None) == flat
+        assert RepairModule.bloatware_for_one_ui(1) == by_gen[1]
+        assert RepairModule.bloatware_for_one_ui(2) == by_gen[1] + by_gen[2]
+        assert RepairModule.bloatware_for_one_ui(4) == by_gen[1] + by_gen[2] + by_gen[4]
+        assert RepairModule.bloatware_for_one_ui(6) == flat
+
+    def test_one_ui_major_from_prop(self):
+        """OOSSPP integer and dotted One-UI props both parse; junk -> None."""
+        f = RepairModule._one_ui_major_from_prop
+        assert f("60100") == 6
+        assert f("50100") == 5
+        assert f("20000") == 2
+        assert f("6.0") == 6
+        assert f("5.1") == 5
+        assert f("600") is None  # too short to be an OOSSPP code
+        assert f("unknown") is None
+        assert f("") is None
+        assert f("  60100  ") == 6
+
+    async def test_gen6_targets_all_generations(self, mock_adb_client):
+        """One UI 6: every generation group is a candidate target."""
+        self._client_with_oneui(mock_adb_client, "60100")
+        module = RepairModule(mock_adb_client)
+        result = await module._repair_disable_bloatware()
+        assert result.success is True
+        details = result.details
+        # Only the gen-1 spage entry exists in the conftest package list
+        assert details["disabled"] == ["com.samsung.android.app.spage"]
+        assert details["filtered_by_generation"] == []
+        assert len(details["absent_on_model"]) == len(RepairModule.SAMSUNG_BLOATWARE) - 1
+
+    async def test_gen2_filters_gen4_entry(self, mock_adb_client):
+        """One UI 2: the One-UI-4 entry is filtered before any pm call."""
+        self._client_with_oneui(mock_adb_client, "20000")
+        module = RepairModule(mock_adb_client)
+        result = await module._repair_disable_bloatware()
+        details = result.details
+        assert details["filtered_by_generation"] == ["com.samsung.android.app.routines"]
+        disable_calls = [
+            c.args[1]
+            for c in mock_adb_client.execute_async.call_args_list
+            if len(c.args) >= 2 and "disable-user" in str(c.args[1])
+        ]
+        # spage (gen 1, installed) attempted; routines (gen 4) never called
+        assert any("spage" in call for call in disable_calls)
+        assert not any("routines" in call for call in disable_calls)
+
+    async def test_unknown_generation_targets_everything(self, mock_adb_client):
+        """No oneui prop -> conservative flat list; absent filter still applies."""
+        self._client_with_oneui(mock_adb_client, "")
+        module = RepairModule(mock_adb_client)
+        result = await module._repair_disable_bloatware()
+        assert result.details["filtered_by_generation"] == []
+        assert result.details["disabled"] == ["com.samsung.android.app.spage"]
