@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "phone-migrate"
+version = "1.0.0"
+description = "Phone-to-phone migration wizard (implementation: tools/migration_wizard.py)"
+requires-python = ">=3.10"
+
+[project.scripts]
+phone-migrate = "phone_migrate:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["phone_migrate"]

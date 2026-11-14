@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "phone-selective-restore"
+version = "1.0.0"
+description = "Selective restore from the phone mirror (implementation: tools/selective_restore.py)"
+requires-python = ">=3.10"
+
+[project.scripts]
+phone-selective-restore = "phone_selective_restore:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["phone_selective_restore"]

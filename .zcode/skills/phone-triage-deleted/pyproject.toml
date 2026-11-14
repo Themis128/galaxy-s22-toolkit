@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "phone-triage-deleted"
+version = "1.0.0"
+description = "Deleted-file recovery triage, read-only (implementation: tools/deleted_file_triage.py)"
+requires-python = ">=3.10"
+
+[project.scripts]
+phone-triage-deleted = "phone_deleted_triage:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["phone_deleted_triage"]

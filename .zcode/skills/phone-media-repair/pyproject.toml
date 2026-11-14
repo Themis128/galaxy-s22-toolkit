@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "phone-media-repair"
+version = "1.0.0"
+description = "Truncated photo/video detection and repair (implementation: tools/media_repair.py)"
+requires-python = ">=3.10"
+
+[project.scripts]
+phone-media-repair = "phone_media_repair:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["phone_media_repair"]
