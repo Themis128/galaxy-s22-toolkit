@@ -31,8 +31,14 @@ def _patch_toasts(monkeypatch, click: str | None = "approve") -> None:
                 toast.on_activated(SimpleNamespace(arguments=click))
 
     monkeypatch.setattr(notify_mod, "_HAS_WINDOWS_TOASTS", True)
-    monkeypatch.setattr(notify_mod, "InteractableWindowsToaster", FakeInteractable)
-    monkeypatch.setattr(notify_mod, "Toast", _fake_toast_factory)
+    monkeypatch.setattr(notify_mod, "InteractableWindowsToaster", FakeInteractable, raising=False)
+    monkeypatch.setattr(notify_mod, "Toast", _fake_toast_factory, raising=False)
+    # windows_toasts is Windows-only — stub the enum/button globals too so
+    # the approval flow is testable on Linux dev boxes (CI runs windows-latest).
+    monkeypatch.setattr(notify_mod, "ToastDuration", SimpleNamespace(Long="long", Default="default"), raising=False)
+    monkeypatch.setattr(notify_mod, "ToastScenario", SimpleNamespace(Reminder="reminder"), raising=False)
+    monkeypatch.setattr(notify_mod, "ToastButton", lambda text, args: SimpleNamespace(text=text, arguments=args), raising=False)
+    monkeypatch.setattr(notify_mod, "WindowsToaster", lambda app_id: SimpleNamespace(show_toast=lambda t: None), raising=False)
 
 
 @pytest.fixture
@@ -71,7 +77,7 @@ class TestApprovalFlow:
                 raise OSError("notifications blocked")
 
         monkeypatch.setattr(notify_mod, "_HAS_WINDOWS_TOASTS", True)
-        monkeypatch.setattr(notify_mod, "InteractableWindowsToaster", FailingToaster)
-        monkeypatch.setattr(notify_mod, "Toast", _fake_toast_factory)
+        monkeypatch.setattr(notify_mod, "InteractableWindowsToaster", FailingToaster, raising=False)
+        monkeypatch.setattr(notify_mod, "Toast", _fake_toast_factory, raising=False)
         with pytest.raises(ApprovalUnavailableError):
             notifier.request_approval("t", "m", timeout_s=5)
