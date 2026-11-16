@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from .screen import ScreenModule
     from .storage import StorageModule
     from .thermal import ThermalModule
+    from .ui import UiModule
 
 
 logger = logging.getLogger(__name__)
@@ -121,6 +122,7 @@ class AdbClient:
         self._network_module: NetworkModule | None = None
         self._thermal_module: ThermalModule | None = None
         self._screen_module: ScreenModule | None = None
+        self._ui_module: UiModule | None = None
 
     @property
     def logcat_module(self) -> LogcatModule:
@@ -202,6 +204,15 @@ class AdbClient:
 
             self._screen_module = ScreenModule(self)
         return self._screen_module
+
+    @property
+    def ui(self) -> UiModule:
+        """Get UiModule instance (uiautomator dump parsing + node control)."""
+        if self._ui_module is None:
+            from .ui import UiModule
+
+            self._ui_module = UiModule(self)
+        return self._ui_module
 
     def _find_adb(self) -> str:
         """Find ADB executable in common locations."""

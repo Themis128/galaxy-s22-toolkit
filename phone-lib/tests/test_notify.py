@@ -35,10 +35,24 @@ def _patch_toasts(monkeypatch, click: str | None = "approve") -> None:
     monkeypatch.setattr(notify_mod, "Toast", _fake_toast_factory, raising=False)
     # windows_toasts is Windows-only — stub the enum/button globals too so
     # the approval flow is testable on Linux dev boxes (CI runs windows-latest).
-    monkeypatch.setattr(notify_mod, "ToastDuration", SimpleNamespace(Long="long", Default="default"), raising=False)
-    monkeypatch.setattr(notify_mod, "ToastScenario", SimpleNamespace(Reminder="reminder"), raising=False)
-    monkeypatch.setattr(notify_mod, "ToastButton", lambda text, args: SimpleNamespace(text=text, arguments=args), raising=False)
-    monkeypatch.setattr(notify_mod, "WindowsToaster", lambda app_id: SimpleNamespace(show_toast=lambda t: None), raising=False)
+    monkeypatch.setattr(
+        notify_mod, "ToastDuration", SimpleNamespace(Long="long", Default="default"), raising=False
+    )
+    monkeypatch.setattr(
+        notify_mod, "ToastScenario", SimpleNamespace(Reminder="reminder"), raising=False
+    )
+    monkeypatch.setattr(
+        notify_mod,
+        "ToastButton",
+        lambda text, args: SimpleNamespace(text=text, arguments=args),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        notify_mod,
+        "WindowsToaster",
+        lambda app_id: SimpleNamespace(show_toast=lambda t: None),
+        raising=False,
+    )
 
 
 @pytest.fixture

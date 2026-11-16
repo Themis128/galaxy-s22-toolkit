@@ -49,6 +49,7 @@ from .termux import (
     TermuxWifiInfo,
 )
 from .thermal import ThermalModule
+from .ui import Bounds, UiModule, UiNode, parse_bounds, parse_ui_xml
 
 __version__ = "0.4.0"
 __author__ = "Phone Toolkit"
@@ -96,6 +97,11 @@ __all__ = [
     "ThermalModule",
     "AppsModule",
     "ScreenModule",
+    "UiModule",
+    "UiNode",
+    "Bounds",
+    "parse_ui_xml",
+    "parse_bounds",
     # Termux
     "TermuxClient",
     "TermuxBattery",
