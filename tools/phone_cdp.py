@@ -24,6 +24,7 @@ import subprocess
 import sys
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tools"))
@@ -68,25 +69,26 @@ def ensure_forward() -> None:
     )
 
 
-def _get(path: str) -> dict:
+def _get(path: str) -> Any:
     with urllib.request.urlopen(f"http://localhost:{PORT}{path}", timeout=10) as r:
         return json.load(r)
 
 
-def find_target(substr: str = "") -> dict:
+def find_target(substr: str = "") -> dict[str, Any]:
     targets = _get("/json")
     pages = [t for t in targets if t.get("type") == "page"]
     if substr:
         pages = [t for t in pages if substr in t.get("url", "")]
     if not pages:
         raise SystemExit(f"no page target matching {substr!r}; run `targets` to list")
-    return pages[0]
+    page: dict[str, Any] = pages[0]
+    return page
 
 
 async def _eval(
-    ws_url: str, expr: str, method: str = "Runtime.evaluate", params: dict | None = None
-) -> dict:
-    import websockets
+    ws_url: str, expr: str, method: str = "Runtime.evaluate", params: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    import websockets  # type: ignore[import-not-found]
 
     async with websockets.connect(ws_url, max_size=50 * 1024 * 1024) as ws:
         await ws.send(
@@ -102,7 +104,8 @@ async def _eval(
         while True:
             m = json.loads(await ws.recv())
             if m.get("id") == 1:
-                return m.get("result", {})
+                res: dict[str, Any] = m.get("result", {})
+                return res
 
 
 def cmd_targets() -> int:

@@ -21,21 +21,25 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from phone import AdbClient, UiNode
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "phone-lib" / "src"))
 sys.path.insert(0, str(REPO / "tools"))
 
 
-def _client():
-    from adb_connect import load_wireless
+def _client() -> AdbClient:
+    from adb_connect import load_wireless  # type: ignore[import-not-found]
 
     from phone import create_client
 
     return create_client(wireless=load_wireless())
 
 
-def _node_line(n) -> str:
+def _node_line(n: UiNode) -> str:
     b = f"[{n.bounds.left},{n.bounds.top}][{n.bounds.right},{n.bounds.bottom}]" if n.bounds else "-"
     flags = f"{'C' if n.clickable else '-'}{'E' if n.enabled else '-'}"
     return (

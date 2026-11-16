@@ -220,8 +220,8 @@ class UiModule:
             self.wait_for(text=text, desc=desc, exact=exact, timeout=timeout) if timeout else None
         )
         if node is None:
-            node = self.find(text=text, desc=desc, exact=exact)
-            node = node[0] if node else None
+            found = self.find(text=text, desc=desc, exact=exact)
+            node = found[0] if found else None
         if node is None:
             return False
         return self.tap_node(node)
